@@ -6,7 +6,7 @@ import { UserRole } from "../common/enums/user-role.enum";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { PublicUser, User as UserEntity } from "./interfaces/user.interface";
 import { User, UserDocument } from "./schemas/user.schema";
-
+import * as bcrypt from "bcrypt";
 type CreateInput = {
   name: string;
   email: string;
@@ -106,7 +106,101 @@ export class UsersService {
       throw error;
     }
   }
+async changePassword(
+  id: string,
+  newPassword: string,
+): Promise<void> {
+  if (!isValidObjectId(id)) {
+    throw new NotFoundException(
+      "User not found",
+    );
+  }
 
+  const hashedPassword =
+    await bcrypt.hash(
+      newPassword,
+      12,
+    );
+
+  const user =
+    await this.userModel
+      .findByIdAndUpdate(
+        id,
+        {
+          $set: {
+            password: hashedPassword,
+          },
+        },
+        {
+          new: true,
+        },
+      )
+      .exec();
+
+  if (!user) {
+    throw new NotFoundException(
+      "User not found",
+    );
+  }
+}
+async changeEmail(
+  id: string,
+  newEmail: string,
+): Promise<void> {
+
+  if (!isValidObjectId(id)) {
+    throw new NotFoundException(
+      "User not found",
+    );
+  }
+
+
+  const normalizedEmail =
+    this.normalizeEmail(
+      newEmail,
+    );
+
+
+  const exists =
+    await this.userModel.exists({
+      email: normalizedEmail,
+      _id: {
+        $ne: id,
+      },
+    });
+
+
+  if (exists) {
+    throw new ConflictException(
+      "Email already registered",
+    );
+  }
+
+
+  const user =
+    await this.userModel
+      .findByIdAndUpdate(
+        id,
+        {
+          $set: {
+            email:
+              normalizedEmail,
+          },
+        },
+        {
+          new: true,
+          runValidators: true,
+        },
+      )
+      .exec();
+
+
+  if (!user) {
+    throw new NotFoundException(
+      "User not found",
+    );
+  }
+}
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
   }
