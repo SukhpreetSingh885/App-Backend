@@ -87,10 +87,48 @@ export class UploadsService {
     };
   }
 
+  getVideoUploadSignature() {
+    const timestamp =
+      Math.round(Date.now() / 1000);
+
+    const folder =
+      "viralstan-academy/videos";
+
+    const apiSecret =
+      this.config.getOrThrow<string>(
+        "CLOUDINARY_API_SECRET",
+      );
+
+    const signature =
+      cloudinary.utils.api_sign_request(
+        {
+          timestamp,
+          folder,
+        },
+        apiSecret,
+      );
+
+    return {
+      timestamp,
+      signature,
+      folder,
+      apiKey:
+        this.config.getOrThrow<string>(
+          "CLOUDINARY_API_KEY",
+        ),
+      cloudName:
+        this.config.getOrThrow<string>(
+          "CLOUDINARY_CLOUD_NAME",
+        ),
+    };
+  }
+
   private uploadBuffer(
     buffer: Buffer,
     folder: string,
-    resourceType: "image" | "video",
+    resourceType:
+      | "image"
+      | "video",
   ): Promise<UploadApiResponse> {
     return new Promise(
       (resolve, reject) => {
@@ -134,7 +172,10 @@ export class UploadsService {
 
         stream.on(
           "error",
-          (error: CloudinaryError) => {
+          (
+            error:
+              CloudinaryError,
+          ) => {
             this.logger.error(
               `Cloudinary stream error: ${error.message ?? "Unknown error"} | status: ${error.http_code ?? "unknown"} | name: ${error.name ?? "unknown"}`,
             );

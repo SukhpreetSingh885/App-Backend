@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   UploadedFile,
   UseGuards,
@@ -21,6 +22,11 @@ export class UploadsController {
   constructor(
     private readonly uploadsService: UploadsService,
   ) {}
+
+  @Get("video-signature")
+  getVideoUploadSignature() {
+    return this.uploadsService.getVideoUploadSignature();
+  }
 
   @Post("image")
   @UseInterceptors(FileInterceptor("file"))
