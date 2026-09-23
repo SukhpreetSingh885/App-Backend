@@ -47,6 +47,26 @@ export class CoursesService {
   }
 
   async findOne(id: string, includeDraft = false) {
+    return this.findOneWithLessonMapper(
+      id,
+      includeDraft,
+      (lesson) => this.toPublicLesson(lesson),
+    );
+  }
+
+  async findOneForLearning(id: string) {
+    return this.findOneWithLessonMapper(
+      id,
+      false,
+      (lesson) => this.toLearningLesson(lesson),
+    );
+  }
+
+  private async findOneWithLessonMapper(
+    id: string,
+    includeDraft: boolean,
+    mapLesson: (lesson: any) => Record<string, unknown>,
+  ) {
     const course = await this.getDocument(id, includeDraft);
 
     const lessons = await this.lessonModel
@@ -58,7 +78,7 @@ export class CoursesService {
     const courseData = course.toObject();
     const embeddedModules = (courseData.modules ?? []).map((module: any) => ({
       ...module,
-      lessons: (module.lessons ?? []).map((lesson: any) => this.toPublicLesson(lesson)),
+      lessons: (module.lessons ?? []).map(mapLesson),
     }));
 
     const modules = lessons.length > 0
@@ -66,7 +86,7 @@ export class CoursesService {
           {
             id: `${id}-lessons`,
             title: "Course Lessons",
-            lessons: lessons.map((lesson: any) => this.toPublicLesson({
+            lessons: lessons.map((lesson: any) => mapLesson({
               ...lesson,
               id: lesson._id.toString(),
             })),
@@ -159,5 +179,12 @@ export class CoursesService {
     }
 
     return publicLesson;
+  }
+
+  private toLearningLesson(lesson: any) {
+    return {
+      ...this.toPublicLesson(lesson),
+      ...(lesson.videoUrl ? { videoUrl: lesson.videoUrl } : {}),
+    };
   }
 }

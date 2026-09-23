@@ -8,10 +8,21 @@ import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { JwtStrategy } from "./strategies/jwt.strategy";
+import { MongooseModule } from "@nestjs/mongoose";
+import { ReferralModule } from "../referrals/referral.module";
+import {
+  ReferralCode,
+  ReferralCodeSchema,
+} from "../referrals/schemas/referral-code.schema";
 
+import {
+  ReferralUsage,
+  ReferralUsageSchema,
+} from "../referrals/schemas/referral-usage.schema";
 @Module({
   imports: [
     forwardRef(() => UsersModule),
+    ReferralModule,
     ConfigModule,
     PassportModule.register({ defaultStrategy: "jwt" }),
     JwtModule.registerAsync({
@@ -22,6 +33,16 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
         signOptions: { expiresIn: config.get<string>("JWT_EXPIRES_IN", "7d") as any },
       }),
     }),
+    MongooseModule.forFeature([
+  {
+    name: ReferralCode.name,
+    schema: ReferralCodeSchema,
+  },
+  {
+    name: ReferralUsage.name,
+    schema: ReferralUsageSchema,
+  },
+]),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, JwtAuthGuard],

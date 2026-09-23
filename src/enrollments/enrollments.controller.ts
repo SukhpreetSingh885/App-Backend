@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { AuthenticatedUser } from "../common/interfaces/authenticated-user.interface";
@@ -21,5 +21,16 @@ export class EnrollmentsController {
   @Get("me")
   findMine(@Req() request: { user: AuthenticatedUser }) {
     return this.enrollmentsService.findForUser(request.user.id);
+  }
+
+  @Get("courses/:courseId/learn")
+  findCourseForLearning(
+    @Req() request: { user: AuthenticatedUser },
+    @Param("courseId") courseId: string,
+  ) {
+    return this.enrollmentsService.findCourseForLearning(
+      request.user.id,
+      courseId,
+    );
   }
 }

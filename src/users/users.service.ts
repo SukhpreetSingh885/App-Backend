@@ -1,6 +1,10 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
-import { isValidObjectId, Model } from "mongoose";
+import {
+  ClientSession,
+  isValidObjectId,
+  Model,
+} from "mongoose";
 
 import { UserRole } from "../common/enums/user-role.enum";
 import { UpdateUserDto } from "./dto/update-user.dto";
@@ -21,17 +25,31 @@ type CreateInput = {
 export class UsersService {
   constructor(@InjectModel(User.name) private readonly userModel: Model<UserDocument>) {}
 
-  async create(input: CreateInput): Promise<PublicUser> {
+async create(
+  input: CreateInput,
+  session?: ClientSession,
+): Promise<PublicUser>  {
     try {
-      const user = await this.userModel.create({
-        name: input.name.trim(),
-        email: this.normalizeEmail(input.email),
-        password: input.passwordHash,
-        role: input.role ?? UserRole.Student,
-        countryCode: input.countryCode?.trim(),
-        mobile: input.mobile?.trim(),
-        phoneNumber: input.phoneNumber?.trim(),
-      });
+   const users = await this.userModel.create(
+  [
+    {
+      name: input.name.trim(),
+      email: this.normalizeEmail(input.email),
+      password: input.passwordHash,
+      role: input.role ?? UserRole.Student,
+      countryCode: input.countryCode?.trim(),
+      mobile: input.mobile?.trim(),
+      phoneNumber: input.phoneNumber?.trim(),
+    },
+  ],
+  session
+    ? {
+        session,
+      }
+    : {},
+);
+
+const user = users[0];
       return this.toPublic(user.toObject());
     } catch (error: unknown) {
       if (this.isDuplicateKeyError(error)) {

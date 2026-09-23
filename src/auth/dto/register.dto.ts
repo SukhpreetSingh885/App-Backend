@@ -3,6 +3,7 @@ import {
   IsString,
   Matches,
   MinLength,
+  IsOptional
 } from "class-validator";
 
 
@@ -34,5 +35,7 @@ export class RegisterDto {
     message: "countryCode must be a valid calling code such as +91",
   })
   countryCode!: string;
-
+@IsOptional()
+@IsString()
+referralCode?: string;
 }
