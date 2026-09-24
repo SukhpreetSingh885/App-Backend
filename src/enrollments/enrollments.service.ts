@@ -309,58 +309,6 @@ private async processReferralReward(
   );
 }
 
-  async revokeFromRefund(
-    userId: string,
-    courseId: string,
-    paymentIntentId: string,
-  ) {
-
-
-    const enrollment =
-      await this.enrollmentModel.findOne({
-
-        userId,
-
-        courseId,
-
-        sourcePaymentIntentId:
-          paymentIntentId,
-
-      });
-
-
-
-    if (!enrollment) {
-
-      return null;
-
-    }
-
-
-
-    if (
-      enrollment.status ===
-      EnrollmentStatus.Cancelled
-    ) {
-
-      return enrollment;
-
-    }
-
-
-
-    enrollment.status =
-      EnrollmentStatus.Cancelled;
-
-
-
-    return enrollment.save();
-
-  }
-
-
-
-
   async findForUser(
     userId: string,
   ) {

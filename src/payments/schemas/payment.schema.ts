@@ -7,8 +7,6 @@ export enum PaymentStatus {
   PENDING = "PENDING",
   SUCCESS = "SUCCESS",
   FAILED = "FAILED",
-  REFUNDED = "REFUNDED",
-  PARTIALLY_REFUNDED = "PARTIALLY_REFUNDED",
 }
 
 @Schema({ timestamps: true })
@@ -48,15 +46,6 @@ export class Payment {
 
   @Prop()
   paidAt?: Date;
-
-  @Prop({
-    default: 0,
-    min: 0,
-  })
-  refundedAmount!: number;
-
-  @Prop()
-  refundedAt?: Date;
 }
 
 export const PaymentSchema =

@@ -1,9 +1,6 @@
 import {
-  Body,
   Controller,
   Get,
-  Param,
-  Post,
   UseGuards,
 } from "@nestjs/common";
 
@@ -40,15 +37,5 @@ revenue() {
 @Get("payments")
 payments() {
   return this.adminService.payments();
-}
-@Post("payments/:paymentId/refund")
-refundPayment(
-  @Param("paymentId") paymentId: string,
-  @Body() body: { amount?: number },
-) {
-  return this.adminService.refundPayment(
-    paymentId,
-    body.amount,
-  );
 }
 }

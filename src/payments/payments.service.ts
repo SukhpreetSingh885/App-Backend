@@ -10,7 +10,6 @@ import Stripe = require("stripe");
 
 import { CoursesService } from "../courses/courses.service";
 import { EnrollmentsService } from "../enrollments/enrollments.service";
-import { ProgressService } from "../progress/progress.service";
 import {
   Payment,
   PaymentDocument,
@@ -25,7 +24,6 @@ export class PaymentsService {
     private readonly config: ConfigService,
     private readonly coursesService: CoursesService,
     private readonly enrollmentsService: EnrollmentsService,
-    private readonly progressService: ProgressService,
     @InjectModel(Payment.name)
     private readonly paymentModel: Model<PaymentDocument>,
   ) {
@@ -101,29 +99,6 @@ export class PaymentsService {
       throw new NotFoundException(
         "Payment not found",
       );
-    }
-
-    if (
-      payment.status ===
-      PaymentStatus.REFUNDED
-    ) {
-      return {
-        success: false,
-        status: PaymentStatus.REFUNDED,
-        payment,
-      };
-    }
-
-    if (
-      payment.status ===
-      PaymentStatus.PARTIALLY_REFUNDED
-    ) {
-      return {
-        success: true,
-        status:
-          PaymentStatus.PARTIALLY_REFUNDED,
-        payment,
-      };
     }
 
     if (
@@ -250,12 +225,7 @@ export class PaymentsService {
     const payments =
       await this.paymentModel
         .find({
-          status: {
-            $in: [
-              PaymentStatus.SUCCESS,
-              PaymentStatus.PARTIALLY_REFUNDED,
-            ],
-          },
+          status: PaymentStatus.SUCCESS,
         })
         .sort({
           paidAt: -1,
@@ -264,22 +234,8 @@ export class PaymentsService {
 
     const totalRevenue =
       payments.reduce(
-        (sum, payment) => {
-          const netAmount =
-            Number(payment.amount) -
-            Number(
-              payment.refundedAmount ??
-                0,
-            );
-
-          return (
-            sum +
-            Math.max(
-              0,
-              netAmount,
-            )
-          );
-        },
+        (sum, payment) =>
+          sum + Number(payment.amount),
         0,
       );
 
@@ -302,13 +258,6 @@ export class PaymentsService {
             payment.courseId,
           );
 
-        const netAmount =
-          Number(payment.amount) -
-          Number(
-            payment.refundedAmount ??
-              0,
-          );
-
         const current =
           courseRevenueMap.get(
             courseId,
@@ -318,10 +267,7 @@ export class PaymentsService {
           };
 
         current.totalRevenue +=
-          Math.max(
-            0,
-            netAmount,
-          );
+          Number(payment.amount);
 
         current.totalPayments += 1;
 
@@ -366,194 +312,6 @@ export class PaymentsService {
       .lean();
   }
 
-  async refundPayment(
-    paymentId: string,
-    amount?: number,
-  ) {
-    const payment =
-      await this.paymentModel.findById(
-        paymentId,
-      );
-
-    if (!payment) {
-      throw new NotFoundException(
-        "Payment not found",
-      );
-    }
-
-    if (
-      payment.status !==
-        PaymentStatus.SUCCESS &&
-      payment.status !==
-        PaymentStatus.PARTIALLY_REFUNDED
-    ) {
-      throw new BadRequestException(
-        "Only successful payments can be refunded",
-      );
-    }
-
-    if (
-      !payment.stripePaymentIntentId
-    ) {
-      throw new BadRequestException(
-        "Stripe payment intent is missing",
-      );
-    }
-
-    const paymentIntentId =
-      payment.stripePaymentIntentId;
-
-    const alreadyRefunded =
-      Number(
-        payment.refundedAmount ??
-          0,
-      );
-
-    const remainingAmount =
-      Number(payment.amount) -
-      alreadyRefunded;
-
-    if (
-      remainingAmount <= 0
-    ) {
-      throw new BadRequestException(
-        "Payment has already been fully refunded",
-      );
-    }
-
-    const refundAmount =
-      amount === undefined
-        ? remainingAmount
-        : Number(amount);
-
-    if (
-      !Number.isFinite(
-        refundAmount,
-      ) ||
-      refundAmount <= 0
-    ) {
-      throw new BadRequestException(
-        "Refund amount must be greater than zero",
-      );
-    }
-
-    if (
-      refundAmount >
-      remainingAmount
-    ) {
-      throw new BadRequestException(
-        "Refund amount cannot exceed the remaining payment amount",
-      );
-    }
-
-    const refundAmountInMinorUnits =
-      Math.round(
-        refundAmount * 100,
-      );
-
-    const refund =
-      await this.stripe.refunds.create(
-        {
-          payment_intent:
-            paymentIntentId,
-
-          amount:
-            refundAmountInMinorUnits,
-
-          metadata: {
-            paymentId:
-              String(
-                payment._id,
-              ),
-            userId:
-              payment.userId,
-            courseId:
-              payment.courseId,
-          },
-        },
-        {
-          idempotencyKey:
-            `refund-${String(
-              payment._id,
-            )}-${alreadyRefunded}-${refundAmountInMinorUnits}`,
-        },
-      );
-
-    if (
-      refund.status !==
-      "succeeded"
-    ) {
-      return {
-        success: false,
-        refundId:
-          refund.id,
-        status:
-          refund.status,
-      };
-    }
-
-    const refundedNow =
-      refund.amount / 100;
-
-    const totalRefunded =
-      Math.min(
-        Number(
-          payment.amount,
-        ),
-        alreadyRefunded +
-          refundedNow,
-      );
-
-    payment.refundedAmount =
-      totalRefunded;
-
-    payment.refundedAt =
-      new Date();
-
-    payment.status =
-      totalRefunded >=
-      Number(payment.amount)
-        ? PaymentStatus.REFUNDED
-        : PaymentStatus.PARTIALLY_REFUNDED;
-
-    await payment.save();
-
-    if (
-      payment.status ===
-      PaymentStatus.REFUNDED
-    ) {
-      await this.enrollmentsService.revokeFromRefund(
-        payment.userId,
-        payment.courseId,
-        paymentIntentId,
-      );
-
-      await this.progressService.resetForCourse(
-        payment.userId,
-        payment.courseId,
-      );
-    }
-
-    return {
-      success: true,
-      refundId:
-        refund.id,
-      refundedAmount:
-        totalRefunded,
-      remainingAmount:
-        Math.max(
-          0,
-          Number(
-            payment.amount,
-          ) -
-            totalRefunded,
-        ),
-      status:
-        payment.status,
-      payment,
-    };
-  }
-
   private async completePaymentFromIntent(
     paymentIntent:
       Stripe.PaymentIntent,
@@ -565,15 +323,6 @@ export class PaymentsService {
       });
 
     if (!payment) {
-      return;
-    }
-
-    if (
-      payment.status ===
-        PaymentStatus.REFUNDED ||
-      payment.status ===
-        PaymentStatus.PARTIALLY_REFUNDED
-    ) {
       return;
     }
 

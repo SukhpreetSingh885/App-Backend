@@ -151,13 +151,4 @@ async revenue() {
 async payments() {
   return this.paymentsService.getPayments();
 }
-async refundPayment(
-  paymentId: string,
-  amount?: number,
-) {
-  return this.paymentsService.refundPayment(
-    paymentId,
-    amount,
-  );
-}
 }
