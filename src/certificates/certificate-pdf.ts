@@ -190,30 +190,45 @@ export function createCertificatePdf(
         align: "center",
       });
 
-    document.moveTo(width / 2 - 85, 468)
-      .lineTo(width / 2 + 85, 468)
-      .lineWidth(1)
-      .strokeColor(NAVY)
-      .stroke();
-    document.fillColor(NAVY)
-      .font("Times-Italic")
-      .fontSize(18)
-      .text(
-        "Authorized",
-        width / 2 - 85,
-        442,
-        { width: 170, align: "center" },
-      );
-    document.fillColor(MUTED)
-      .font("Helvetica")
-      .fontSize(10)
-      .text(
-        "AUTHORIZED SIGNATORY",
-        width / 2 - 85,
-        476,
-        { width: 170, align: "center" },
-      );
+const signaturePath = join(
+  process.cwd(),
+  "assets",
+  "authorized-signature.png",
+);
 
+if (existsSync(signaturePath)) {
+  document.image(
+    signaturePath,
+    width / 2 - 60,
+    425,
+    {
+      width: 120,
+      height: 40,
+      fit: [120, 40],
+      align: "center",
+      valign: "center",
+    },
+  );
+}
+
+document.moveTo(width / 2 - 85, 468)
+  .lineTo(width / 2 + 85, 468)
+  .lineWidth(1)
+  .strokeColor(NAVY)
+  .stroke();
+
+document.fillColor(MUTED)
+  .font("Helvetica")
+  .fontSize(10)
+  .text(
+    "AUTHORIZED SIGNATORY",
+    width / 2 - 85,
+    476,
+    {
+      width: 170,
+      align: "center",
+    },
+  );
     document.fillColor(NAVY)
       .font("Helvetica-Bold")
       .fontSize(10)
