@@ -6,9 +6,13 @@ import { CoursesService } from "./courses.service";
 import { Course, CourseSchema } from "./schemas/course.schema";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { Lesson, LessonSchema } from "../lessons/schemas/lesson.schema";
+import { NotificationsModule } from "../notifications/notifications.module";
+import { UsersModule } from "../users/users.module";
 
 @Module({
   imports: [
+    NotificationsModule,
+    UsersModule,
     MongooseModule.forFeature([
       {
         name: Course.name,

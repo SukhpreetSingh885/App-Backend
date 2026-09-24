@@ -24,3 +24,12 @@ export class Progress {
 
 export const ProgressSchema =
   SchemaFactory.createForClass(Progress);
+
+ProgressSchema.index(
+  {
+    userId: 1,
+    courseId: 1,
+    lessonId: 1,
+  },
+  { unique: true },
+);

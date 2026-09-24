@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 
@@ -7,14 +11,27 @@ import { CreateCourseDto } from "./dto/create-course.dto";
 import { UpdateCourseDto } from "./dto/update-course.dto";
 import { CourseStatus } from "./interfaces/course.interface";
 import { Course as CourseDocument } from "./schemas/course.schema";
+import { UserRole } from "../common/enums/user-role.enum";
+import { NotificationsService } from "../notifications/notifications.service";
+import {
+  NotificationRecipientType,
+  NotificationType,
+} from "../notifications/schemas/notification.schema";
+import { UsersService } from "../users/users.service";
 
 @Injectable()
 export class CoursesService {
+  private readonly logger =
+    new Logger(CoursesService.name);
+
   constructor(
     @InjectModel(CourseDocument.name)
     private readonly courseModel: Model<CourseDocument>,
     @InjectModel(LessonDocument.name)
     private readonly lessonModel: Model<LessonDocument>,
+    private readonly usersService: UsersService,
+    private readonly notificationsService:
+      NotificationsService,
   ) {}
 
   async create(dto: CreateCourseDto) {
@@ -133,6 +150,15 @@ export class CoursesService {
   }
 
   async update(id: string, dto: UpdateCourseDto) {
+    const previousCourse =
+      dto.status === CourseStatus.Published
+        ? await this.courseModel
+            .findById(id)
+            .select("status")
+            .lean()
+            .exec()
+        : null;
+
     const course = await this.courseModel
       .findByIdAndUpdate(
         id,
@@ -146,6 +172,18 @@ export class CoursesService {
 
     if (!course) {
       throw new NotFoundException("Course not found");
+    }
+
+    if (
+      previousCourse &&
+      previousCourse.status !==
+        CourseStatus.Published &&
+      course.status === CourseStatus.Published
+    ) {
+      await this.notifyStudentsOfPublishedCourse(
+        course._id.toString(),
+        course.title,
+      );
     }
 
     return course;
@@ -186,5 +224,38 @@ export class CoursesService {
       ...this.toPublicLesson(lesson),
       ...(lesson.videoUrl ? { videoUrl: lesson.videoUrl } : {}),
     };
+  }
+
+  private async notifyStudentsOfPublishedCourse(
+    courseId: string,
+    courseTitle: string,
+  ) {
+    try {
+      const studentIds =
+        await this.usersService.findIdsByRole(
+          UserRole.Student,
+        );
+
+      await this.notificationsService.createMany(
+        studentIds.map((studentId) => ({
+          recipientId: studentId,
+          recipientType:
+            NotificationRecipientType.Student,
+          type: NotificationType.CoursePublished,
+          title: "New Course Available",
+          message: `${courseTitle} is now available.`,
+          data: { courseId },
+          eventKey:
+            `course-published:${courseId}`,
+        })),
+      );
+    } catch (error) {
+      this.logger.error(
+        "Failed to create course publication notifications",
+        error instanceof Error
+          ? error.stack
+          : String(error),
+      );
+    }
   }
 }

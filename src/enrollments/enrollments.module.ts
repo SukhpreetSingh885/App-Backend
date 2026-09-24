@@ -13,6 +13,8 @@ import {
   ReferralUsageSchema,
 } from "../referrals/schemas/referral-usage.schema";
 import { WalletModule } from "../wallet/wallet.module";
+import { NotificationsModule } from "../notifications/notifications.module";
+import { UsersModule } from "../users/users.module";
 @Module({
 imports: [
 
@@ -22,6 +24,8 @@ imports: [
 
   ReferralModule,
 WalletModule,
+NotificationsModule,
+UsersModule,
  MongooseModule.forFeature([
 
   {

@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from "@nestjs/common";
 
@@ -21,6 +22,11 @@ import { UserRole } from "../common/enums/user-role.enum";
 import { UsersService } from "../users/users.service";
 import { ReferralService } from "../referrals/referral.service";
 import { VerificationService } from "../verification/verification.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import {
+  NotificationRecipientType,
+  NotificationType,
+} from "../notifications/schemas/notification.schema";
 
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
@@ -38,6 +44,9 @@ import {
 
 @Injectable()
 export class AuthService {
+  private readonly logger =
+    new Logger(AuthService.name);
+
   constructor(
     @InjectConnection()
     private readonly connection: Connection,
@@ -49,6 +58,9 @@ export class AuthService {
     private readonly referralService: ReferralService,
 
     private readonly verificationService: VerificationService,
+
+    private readonly notificationsService:
+      NotificationsService,
 
     @InjectModel(ReferralCode.name)
     private readonly referralCodeModel:
@@ -204,11 +216,15 @@ export class AuthService {
         );
       }
 
-      return {
-        user,
-        accessToken:
-          await this.sign(user),
-      };
+      const accessToken =
+        await this.sign(user);
+
+      await this.notifyAdminsOfRegistration(
+        user.id,
+        user.name,
+      );
+
+      return { user, accessToken };
     } finally {
       await session.endSession();
     }
@@ -344,5 +360,38 @@ async resetForgotPassword(
       email: user.email,
       role: user.role,
     });
+  }
+
+  private async notifyAdminsOfRegistration(
+    studentId: string,
+    studentName: string,
+  ) {
+    try {
+      const adminIds =
+        await this.usersService.findIdsByRole(
+          UserRole.Admin,
+        );
+
+      await this.notificationsService.createMany(
+        adminIds.map((adminId) => ({
+          recipientId: adminId,
+          recipientType:
+            NotificationRecipientType.Admin,
+          type: NotificationType.StudentRegistered,
+          title: "New Student",
+          message: `${studentName} registered for Viralstan Academy.`,
+          data: { studentId },
+          eventKey:
+            `student-registered:${studentId}`,
+        })),
+      );
+    } catch (error) {
+      this.logger.error(
+        "Failed to create registration notifications",
+        error instanceof Error
+          ? error.stack
+          : String(error),
+      );
+    }
   }
 }

@@ -67,6 +67,20 @@ const user = users[0];
     return users.map((user) => this.toPublic(user));
   }
 
+  async findIdsByRole(
+    role: UserRole,
+  ): Promise<string[]> {
+    const users = await this.userModel
+      .find({ role })
+      .select("_id")
+      .lean()
+      .exec();
+
+    return users.map((user) =>
+      user._id.toString(),
+    );
+  }
+
   async findById(id: string): Promise<PublicUser> {
     if (!isValidObjectId(id)) throw new NotFoundException("User not found");
     const user = await this.userModel.findById(id).lean().exec();

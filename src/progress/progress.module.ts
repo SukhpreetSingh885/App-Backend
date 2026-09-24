@@ -8,12 +8,14 @@ import { LessonsModule } from "../lessons/lessons.module";
 import { ProgressController } from "./progress.controller";
 import { ProgressService } from "./progress.service";
 import { Progress, ProgressSchema } from "./schemas/progress.schema";
+import { CertificatesModule } from "../certificates/certificates.module";
 
 @Module({
   imports: [
     AuthModule,
     EnrollmentsModule,
     LessonsModule,
+    CertificatesModule,
     MongooseModule.forFeature([
       {
         name: Progress.name,

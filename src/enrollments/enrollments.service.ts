@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 
@@ -11,6 +12,13 @@ import { Model } from "mongoose";
 import { CoursesService } from "../courses/courses.service";
 import { ReferralService } from "../referrals/referral.service";
 import { WalletService } from "../wallet/wallet.service";
+import { UserRole } from "../common/enums/user-role.enum";
+import { NotificationsService } from "../notifications/notifications.service";
+import {
+  NotificationRecipientType,
+  NotificationType,
+} from "../notifications/schemas/notification.schema";
+import { UsersService } from "../users/users.service";
 
 import {
   ReferralUsage,
@@ -25,6 +33,9 @@ import { Enrollment as EnrollmentDocument } from "./schemas/enrollment.schema";
 @Injectable()
 export class EnrollmentsService {
 
+  private readonly logger =
+    new Logger(EnrollmentsService.name);
+
 
   constructor(
 
@@ -33,6 +44,11 @@ export class EnrollmentsService {
     private readonly referralService: ReferralService,
 
     private readonly walletService: WalletService,
+
+    private readonly usersService: UsersService,
+
+    private readonly notificationsService:
+      NotificationsService,
 
 
     @InjectModel(ReferralUsage.name)
@@ -131,6 +147,13 @@ export class EnrollmentsService {
 
       });
 
+    await this.notifyEnrollmentCreated(
+      userId,
+      courseId,
+      course.title,
+      enrollment._id.toString(),
+    );
+
 
 
     await this.referralService
@@ -157,9 +180,10 @@ export class EnrollmentsService {
   ) {
 
 
-    await this.coursesService.getDocument(
-      courseId,
-    );
+    const course =
+      await this.coursesService.getDocument(
+        courseId,
+      );
 
 
 
@@ -248,6 +272,13 @@ export class EnrollmentsService {
 
       });
 
+    await this.notifyEnrollmentCreated(
+      userId,
+      courseId,
+      course.title,
+      enrollment._id.toString(),
+    );
+
 
 
     await this.referralService
@@ -291,6 +322,12 @@ private async processReferralReward(
       "Referral reward",
       `referral:${referral._id.toString()}`,
     );
+
+    await this.notifyReferralReward(
+      referral.referrerId.toString(),
+      referral._id.toString(),
+      rewardAmount,
+    );
   }
 
   await this.referralUsageModel.updateOne(
@@ -307,6 +344,94 @@ private async processReferralReward(
       },
     },
   );
+}
+
+private async notifyEnrollmentCreated(
+  studentId: string,
+  courseId: string,
+  courseTitle: string,
+  enrollmentId: string,
+) {
+  try {
+    const [student, adminIds] =
+      await Promise.all([
+        this.usersService.findById(studentId),
+        this.usersService.findIdsByRole(
+          UserRole.Admin,
+        ),
+      ]);
+
+    const eventKey =
+      `enrollment:${enrollmentId}`;
+
+    await this.notificationsService.createMany([
+      {
+        recipientId: studentId,
+        recipientType:
+          NotificationRecipientType.Student,
+        type:
+          NotificationType.EnrollmentSuccessful,
+        title: "Enrollment Successful",
+        message:
+          `You are now enrolled in ${courseTitle}.`,
+        data: { courseId, enrollmentId },
+        eventKey,
+      },
+      ...adminIds.map((adminId) => ({
+        recipientId: adminId,
+        recipientType:
+          NotificationRecipientType.Admin,
+        type: NotificationType.NewEnrollment,
+        title: "New Enrollment",
+        message:
+          `${student.name} enrolled in ${courseTitle}.`,
+        data: {
+          courseId,
+          enrollmentId,
+          studentId,
+        },
+        eventKey,
+      })),
+    ]);
+  } catch (error) {
+    this.logger.error(
+      "Failed to create enrollment notifications",
+      error instanceof Error
+        ? error.stack
+        : String(error),
+    );
+  }
+}
+
+private async notifyReferralReward(
+  referrerId: string,
+  referralUsageId: string,
+  rewardAmount: number,
+) {
+  try {
+    await this.notificationsService.create({
+      recipientId: referrerId,
+      recipientType:
+        NotificationRecipientType.Student,
+      type: NotificationType.ReferralReward,
+      title: "Referral Reward",
+      message:
+        `₹${rewardAmount.toLocaleString("en-IN")} referral reward was added to your wallet.`,
+      data: {
+        amount: rewardAmount,
+        referralUsageId,
+      },
+      eventKey:
+        `referral-reward:${referralUsageId}`,
+    });
+  } catch (error) {
+    this.logger.error(
+      "Failed to create referral reward notification",
+      error instanceof Error
+        ? error.stack
+        : String(error),
+    );
+  }
 }
 
   async findForUser(

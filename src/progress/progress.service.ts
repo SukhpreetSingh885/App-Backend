@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+} from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 
@@ -6,12 +10,18 @@ import { EnrollmentsService } from "../enrollments/enrollments.service";
 import { LessonsService } from "../lessons/lessons.service";
 import { UpdateProgressDto } from "./dto/update-progress.dto";
 import { Progress as ProgressDocument } from "./schemas/progress.schema";
+import { CertificatesService } from "../certificates/certificates.service";
 
 @Injectable()
 export class ProgressService {
+  private readonly logger =
+    new Logger(ProgressService.name);
+
   constructor(
     private readonly enrollmentsService: EnrollmentsService,
     private readonly lessonsService: LessonsService,
+    private readonly certificatesService:
+      CertificatesService,
 
     @InjectModel(ProgressDocument.name)
     private readonly progressModel: Model<ProgressDocument>,
@@ -39,36 +49,79 @@ export class ProgressService {
       );
     }
 
-    let record =
-      await this.progressModel.findOne({
-        userId,
-        courseId,
-        lessonId,
-      });
-
-    if (!record) {
-      record = new this.progressModel({
-        userId,
-        courseId,
-        lessonId,
-        completed: false,
-        lastWatchedPosition: 0,
-      });
-    }
+    const changes: Record<string, boolean | number> = {};
 
     if (dto.completed !== undefined) {
-      record.completed = dto.completed;
+      changes.completed = dto.completed;
     }
 
     if (
       dto.lastWatchedPosition !==
       undefined
     ) {
-      record.lastWatchedPosition =
+      changes.lastWatchedPosition =
         dto.lastWatchedPosition;
     }
 
-    return record.save();
+    const filter = {
+      userId,
+      courseId,
+      lessonId,
+    };
+
+    let savedRecord;
+
+    try {
+      savedRecord = await this.progressModel
+        .findOneAndUpdate(
+          filter,
+          { $set: changes },
+          {
+            new: true,
+            upsert: true,
+            runValidators: true,
+            setDefaultsOnInsert: true,
+          },
+        )
+        .exec();
+    } catch (error) {
+      if (!this.isDuplicateKeyError(error)) {
+        throw error;
+      }
+
+      savedRecord = await this.progressModel
+        .findOneAndUpdate(
+          filter,
+          { $set: changes },
+          {
+            new: true,
+            runValidators: true,
+          },
+        )
+        .exec();
+    }
+
+    if (!savedRecord) {
+      throw new Error(
+        "Progress record could not be saved",
+      );
+    }
+
+    if (dto.completed === true) {
+      try {
+        await this.certificatesService
+          .issueIfEligible(userId, courseId);
+      } catch (error) {
+        this.logger.error(
+          "Automatic certificate issuance failed",
+          error instanceof Error
+            ? error.stack
+            : String(error),
+        );
+      }
+    }
+
+    return savedRecord;
   }
 
   async complete(
@@ -111,5 +164,16 @@ export class ProgressService {
 
   async findAll() {
     return this.progressModel.find();
+  }
+
+  private isDuplicateKeyError(
+    error: unknown,
+  ): error is { code: number } {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === 11000
+    );
   }
 }

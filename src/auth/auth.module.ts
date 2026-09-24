@@ -7,6 +7,7 @@ import { MongooseModule } from "@nestjs/mongoose";
 import { UsersModule } from "../users/users.module";
 import { ReferralModule } from "../referrals/referral.module";
 import { VerificationModule } from "../verification/verification.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
@@ -30,6 +31,8 @@ import {
     ReferralModule,
 
     VerificationModule,
+
+    NotificationsModule,
 
     ConfigModule,
 

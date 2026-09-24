@@ -16,6 +16,8 @@ import { UploadsModule } from "./uploads/uploads.module";
 import { UsersModule } from "./users/users.module";
 import { AdminSecurityModule } from "./admin-security/admin-security.module";
 import { VerificationModule } from "./verification/verification.module";
+import { NotificationsModule } from "./notifications/notifications.module";
+import { CertificatesModule } from "./certificates/certificates.module";
 
 @Module({
   imports: [
@@ -45,6 +47,8 @@ import { VerificationModule } from "./verification/verification.module";
     UploadsModule,
     AdminSecurityModule,
     VerificationModule,
+    NotificationsModule,
+    CertificatesModule,
   ],
 })
 export class AppModule {}
