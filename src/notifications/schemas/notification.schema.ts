@@ -96,3 +96,9 @@ NotificationSchema.index(
     },
   },
 );
+
+// Automatically delete notifications 7 days after creation.
+NotificationSchema.index(
+  { createdAt: 1 },
+  { expireAfterSeconds: 7 * 24 * 60 * 60 },
+);

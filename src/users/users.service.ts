@@ -121,8 +121,9 @@ const user = users[0];
   async update(id: string, dto: UpdateUserDto): Promise<PublicUser> {
     if (!isValidObjectId(id)) throw new NotFoundException("User not found");
     const update: Record<string, string> = {};
-    if (dto.name !== undefined) update.name = dto.name.trim();
-    if (dto.email !== undefined) update.email = this.normalizeEmail(dto.email);
+ if (dto.name !== undefined) {
+  update.name = dto.name.trim();
+}
 
     try {
       const user = await this.userModel

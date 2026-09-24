@@ -8,6 +8,7 @@ export enum VerificationType {
   Email = "email",
   Mobile = "mobile",
   PasswordReset = "password_reset",
+  EmailChange = "email_change",
 }
 
 @Schema({

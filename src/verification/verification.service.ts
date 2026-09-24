@@ -694,4 +694,190 @@ async consumePasswordResetVerification(
 
     return Boolean(verification);
   }
+  async sendEmailChangeOtp(email: string) {
+  const identifier =
+    this.normalizeEmail(email);
+
+  if (!identifier) {
+    throw new BadRequestException(
+      "New email address is required",
+    );
+  }
+
+  const existing =
+    await this.verificationModel.findOne({
+      type: VerificationType.EmailChange,
+      identifier,
+    });
+
+  this.checkResendCooldown(existing);
+
+  const otp = this.generateOtp();
+  const otpHash = this.hashOtp(otp);
+
+  const otpExpiresAt = new Date(
+    Date.now() +
+      this.OTP_EXPIRY_MINUTES * 60 * 1000,
+  );
+
+  await this.sendBrevoEmailOtp(
+    identifier,
+    otp,
+  );
+
+  await this.verificationModel.findOneAndUpdate(
+    {
+      type: VerificationType.EmailChange,
+      identifier,
+    },
+    {
+      $set: {
+        verified: false,
+        verifiedAt: null,
+        otpHash,
+        otpExpiresAt,
+        attempts: 0,
+        lastSentAt: new Date(),
+      },
+    },
+    {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true,
+    },
+  );
+
+  return {
+    message:
+      "Email change OTP sent successfully",
+  };
+}
+
+async verifyEmailChangeOtp(
+  email: string,
+  otp: string,
+) {
+  const identifier =
+    this.normalizeEmail(email);
+
+  if (!otp?.trim()) {
+    throw new BadRequestException(
+      "OTP is required",
+    );
+  }
+
+  const verification =
+    await this.verificationModel.findOne({
+      type: VerificationType.EmailChange,
+      identifier,
+    });
+
+  if (!verification) {
+    throw new BadRequestException(
+      "Please request an email change OTP first",
+    );
+  }
+
+  if (verification.verified) {
+    return {
+      verified: true,
+      message:
+        "New email already verified",
+    };
+  }
+
+  if (
+    !verification.otpExpiresAt ||
+    verification.otpExpiresAt.getTime() <
+      Date.now()
+  ) {
+    throw new BadRequestException(
+      "OTP has expired. Please request a new OTP",
+    );
+  }
+
+  if (
+    verification.attempts >=
+    this.MAX_ATTEMPTS
+  ) {
+    throw new HttpException(
+      "Too many incorrect attempts. Please request a new OTP",
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
+
+  const submittedHash =
+    this.hashOtp(otp.trim());
+
+  if (
+    !verification.otpHash ||
+    submittedHash !==
+      verification.otpHash
+  ) {
+    await this.verificationModel.updateOne(
+      {
+        _id: verification._id,
+      },
+      {
+        $inc: {
+          attempts: 1,
+        },
+      },
+    );
+
+    throw new BadRequestException(
+      "Invalid OTP",
+    );
+  }
+
+  await this.verificationModel.updateOne(
+    {
+      _id: verification._id,
+    },
+    {
+      $set: {
+        verified: true,
+        verifiedAt: new Date(),
+      },
+      $unset: {
+        otpHash: 1,
+        otpExpiresAt: 1,
+      },
+    },
+  );
+
+  return {
+    verified: true,
+    message:
+      "New email verified successfully",
+  };
+}
+
+async isEmailChangeVerified(
+  email: string,
+): Promise<boolean> {
+  const identifier =
+    this.normalizeEmail(email);
+
+  const verification =
+    await this.verificationModel.exists({
+      type: VerificationType.EmailChange,
+      identifier,
+      verified: true,
+    });
+
+  return Boolean(verification);
+}
+
+async consumeEmailChangeVerification(
+  email: string,
+): Promise<void> {
+  const identifier =
+    this.normalizeEmail(email);
+
+  await this.verificationModel.deleteOne({
+    type: VerificationType.EmailChange,
+    identifier,
+  });
+}
 }
