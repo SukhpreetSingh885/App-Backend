@@ -252,7 +252,86 @@ export class AuthService {
         await this.sign(publicUser),
     };
   }
+async sendForgotPasswordOtp(
+  email: string,
+) {
+  const user =
+    await this.usersService
+      .findByEmailWithPassword(email);
 
+  if (!user) {
+    throw new UnauthorizedException(
+      "No account found with this email",
+    );
+  }
+
+  await this.verificationService
+    .sendPasswordResetOtp(email);
+
+  return {
+    message:
+      "Password reset OTP sent successfully",
+  };
+}
+
+async verifyForgotPasswordOtp(
+  email: string,
+  otp: string,
+) {
+  const user =
+    await this.usersService
+      .findByEmailWithPassword(email);
+
+  if (!user) {
+    throw new UnauthorizedException(
+      "No account found with this email",
+    );
+  }
+
+  return this.verificationService
+    .verifyPasswordResetOtp(
+      email,
+      otp,
+    );
+}
+
+async resetForgotPassword(
+  email: string,
+  password: string,
+) {
+  const user =
+    await this.usersService
+      .findByEmailWithPassword(email);
+
+  if (!user) {
+    throw new UnauthorizedException(
+      "No account found with this email",
+    );
+  }
+
+  const verified =
+    await this.verificationService
+      .isPasswordResetVerified(email);
+
+  if (!verified) {
+    throw new UnauthorizedException(
+      "Please verify the password reset OTP first",
+    );
+  }
+
+  await this.usersService.changePassword(
+    user.id,
+    password,
+  );
+
+  await this.verificationService
+    .consumePasswordResetVerification(email);
+
+  return {
+    message:
+      "Password reset successfully",
+  };
+}
   private sign(
     user: {
       id: string;

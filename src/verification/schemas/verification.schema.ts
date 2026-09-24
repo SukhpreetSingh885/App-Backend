@@ -7,6 +7,7 @@ export type VerificationDocument =
 export enum VerificationType {
   Email = "email",
   Mobile = "mobile",
+  PasswordReset = "password_reset",
 }
 
 @Schema({
