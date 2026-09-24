@@ -267,57 +267,47 @@ export class EnrollmentsService {
 
 
 
+private async processReferralReward(
+  studentId: string,
+) {
+  const referral =
+    await this.referralUsageModel.findOne({
+      referredStudentId: studentId,
+      status: ReferralUsageStatus.Pending,
+      rewardGiven: false,
+    });
 
-  private async processReferralReward(
-    studentId: string,
-  ) {
+  if (!referral) {
+    return;
+  }
 
+  const rewardAmount =
+    referral.rewardAmount;
 
-    const referral =
-      await this.referralUsageModel.findOneAndUpdate(
-        {
-          referredStudentId: studentId,
-          status: ReferralUsageStatus.Pending,
-          rewardGiven: false,
-        },
-        {
-          $set: {
-            status:
-              ReferralUsageStatus.Completed,
-            rewardGiven: true,
-          },
-        },
-        {
-          new: true,
-        },
-      );
-
-
-    if (!referral) {
-
-      return;
-
-    }
-
-
-
-    const rewardAmount =
-  referral.rewardAmount;
-
-    if (rewardAmount <= 0) {
-
-      return;
-
-    }
-
+  if (rewardAmount > 0) {
     await this.walletService.addCredit(
       referral.referrerId.toString(),
       rewardAmount,
       "Referral reward",
       `referral:${referral._id.toString()}`,
     );
-
   }
+
+  await this.referralUsageModel.updateOne(
+    {
+      _id: referral._id,
+      status: ReferralUsageStatus.Pending,
+      rewardGiven: false,
+    },
+    {
+      $set: {
+        status:
+          ReferralUsageStatus.Completed,
+        rewardGiven: true,
+      },
+    },
+  );
+}
 
   async revokeFromRefund(
     userId: string,
