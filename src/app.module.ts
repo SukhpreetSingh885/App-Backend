@@ -15,6 +15,7 @@ import { ProgressModule } from "./progress/progress.module";
 import { UploadsModule } from "./uploads/uploads.module";
 import { UsersModule } from "./users/users.module";
 import { AdminSecurityModule } from "./admin-security/admin-security.module";
+import { VerificationModule } from "./verification/verification.module";
 
 @Module({
   imports: [
@@ -43,7 +44,7 @@ import { AdminSecurityModule } from "./admin-security/admin-security.module";
     PaymentsModule,
     UploadsModule,
     AdminSecurityModule,
-   
+    VerificationModule,
   ],
 })
 export class AppModule {}

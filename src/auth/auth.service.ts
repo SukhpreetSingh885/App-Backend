@@ -20,6 +20,7 @@ import { compare, hash } from "bcryptjs";
 import { UserRole } from "../common/enums/user-role.enum";
 import { UsersService } from "../users/users.service";
 import { ReferralService } from "../referrals/referral.service";
+import { VerificationService } from "../verification/verification.service";
 
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
@@ -47,6 +48,8 @@ export class AuthService {
 
     private readonly referralService: ReferralService,
 
+    private readonly verificationService: VerificationService,
+
     @InjectModel(ReferralCode.name)
     private readonly referralCodeModel:
       Model<ReferralCodeDocument>,
@@ -64,6 +67,17 @@ export class AuthService {
     ) {
       throw new ConflictException(
         "An account with this email already exists",
+      );
+    }
+
+    const emailVerified =
+      await this.verificationService.isEmailVerified(
+        dto.email,
+      );
+
+    if (!emailVerified) {
+      throw new UnauthorizedException(
+        "Please verify your email before creating an account",
       );
     }
 
