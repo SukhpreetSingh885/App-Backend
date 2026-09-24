@@ -18,6 +18,7 @@ import { AdminSecurityModule } from "./admin-security/admin-security.module";
 import { VerificationModule } from "./verification/verification.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { CertificatesModule } from "./certificates/certificates.module";
+import { WithdrawalsModule } from "./withdrawals/withdrawals.module";
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { CertificatesModule } from "./certificates/certificates.module";
     VerificationModule,
     NotificationsModule,
     CertificatesModule,
+    WithdrawalsModule,
   ],
 })
 export class AppModule {}

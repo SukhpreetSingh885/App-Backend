@@ -26,6 +26,9 @@ export enum NotificationType {
   NewEnrollment = "new_enrollment",
   ReferralReward = "referral_reward",
   CertificateAvailable = "certificate_available",
+  WithdrawalRequested = "withdrawal_requested",
+  WithdrawalPaid = "withdrawal_paid",
+  WithdrawalFailed = "withdrawal_failed",
 }
 
 @Schema({ timestamps: true, versionKey: false })
