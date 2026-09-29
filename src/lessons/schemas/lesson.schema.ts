@@ -20,6 +20,12 @@ export class Lesson {
   description!: string;
 
   @Prop({
+    enum: ["Development", "Design", "Marketing", "Business", "AI"],
+    default: "Development",
+  })
+  category!: "Development" | "Design" | "Marketing" | "Business" | "AI";
+
+  @Prop({
     enum: ["upload", "url"],
     default: "url",
   })

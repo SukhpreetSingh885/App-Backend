@@ -18,6 +18,9 @@ export class CreateLessonDto {
   @IsString()
   description!: string;
 
+  @IsIn(["Development", "Design", "Marketing", "Business", "AI"])
+  category!: "Development" | "Design" | "Marketing" | "Business" | "AI";
+
   @IsIn(["upload", "url"])
   videoSource!: "upload" | "url";
 

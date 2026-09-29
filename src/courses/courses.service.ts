@@ -208,6 +208,7 @@ export class CoursesService {
     const publicLesson: Record<string, unknown> = {
       id: lesson.id ?? lesson._id?.toString(),
       title: lesson.title,
+      category: lesson.category ?? "Development",
       duration: lesson.duration,
       isPreview,
     };

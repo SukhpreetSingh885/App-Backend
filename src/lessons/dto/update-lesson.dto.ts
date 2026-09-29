@@ -18,6 +18,10 @@ export class UpdateLessonDto {
   description?: string;
 
   @IsOptional()
+  @IsIn(["Development", "Design", "Marketing", "Business", "AI"])
+  category?: "Development" | "Design" | "Marketing" | "Business" | "AI";
+
+  @IsOptional()
   @IsIn(["upload", "url"])
   videoSource?: "upload" | "url";
 
