@@ -1,9 +1,9 @@
+
 import { Module } from "@nestjs/common";
-import {
-  ConfigModule,
-  ConfigService,
-} from "@nestjs/config";
+import { APP_GUARD } from "@nestjs/core";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import { MongooseModule } from "@nestjs/mongoose";
+import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
 
 import { AdminModule } from "./admin/admin.module";
 import { AuthModule } from "./auth/auth.module";
@@ -22,18 +22,23 @@ import { WithdrawalsModule } from "./withdrawals/withdrawals.module";
 
 @Module({
   imports: [
+
     ConfigModule.forRoot({
       isGlobal: true,
     }),
 
+    ThrottlerModule.forRoot([
+      {
+        name: "default",
+        ttl: 60000,
+        limit: 120,
+      },
+    ]),
+
     MongooseModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (
-        config: ConfigService,
-      ) => ({
-        uri: config.getOrThrow<string>(
-          "MONGODB_URI",
-        ),
+      useFactory: (config: ConfigService) => ({
+        uri: config.getOrThrow<string>("MONGODB_URI"),
       }),
     }),
 
@@ -51,6 +56,14 @@ import { WithdrawalsModule } from "./withdrawals/withdrawals.module";
     NotificationsModule,
     CertificatesModule,
     WithdrawalsModule,
+  ],
+
+
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}
