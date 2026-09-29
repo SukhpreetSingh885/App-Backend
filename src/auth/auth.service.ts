@@ -41,7 +41,7 @@ import {
   ReferralUsageDocument,
   ReferralUsageStatus,
 } from "../referrals/schemas/referral-usage.schema";
-
+import { AuthSecurityService } from "../auth-security/auth-security.service";
 @Injectable()
 export class AuthService {
   private readonly logger =
@@ -54,6 +54,7 @@ export class AuthService {
     private readonly usersService: UsersService,
 
     private readonly jwtService: JwtService,
+    private readonly authSecurityService: AuthSecurityService,
 
     private readonly referralService: ReferralService,
 
@@ -244,24 +245,46 @@ export class AuthService {
             .findByPhoneNumberWithPassword(
               identifier,
             );
+if (user) {
+  const security =
+    await this.authSecurityService
+      .getOrCreate(user.id);
 
-    if (
-      !user ||
-      !(await compare(
-        dto.password,
-        user.password,
-      ))
-    ) {
-      throw new UnauthorizedException(
-        "Invalid email/mobile or password",
-      );
-    }
+  if (
+    security.lockUntil &&
+    security.lockUntil > new Date()
+  ) {
+    throw new UnauthorizedException(
+      "Account temporarily locked. Please try again later.",
+    );
+  }
+}
+const isPasswordValid =
+  user &&
+  await compare(
+    dto.password,
+    user.password,
+  );
+
+if (!user || !isPasswordValid) {
+
+  if (user) {
+    await this.authSecurityService
+      .recordFailedLogin(user.id);
+  }
+
+  throw new UnauthorizedException(
+    "Invalid email/mobile or password",
+  );
+}
 
     const {
       password: _password,
       ...publicUser
     } = user;
-
+await this.authSecurityService.resetFailedAttempts(
+  user.id,
+);
     return {
       user: publicUser,
       accessToken:
@@ -282,7 +305,10 @@ async sendForgotPasswordOtp(
   }
 
   await this.verificationService
-    .sendPasswordResetOtp(email);
+    .sendPasswordResetOtp(
+      email,
+      user.name,
+    );
 
   return {
     message:

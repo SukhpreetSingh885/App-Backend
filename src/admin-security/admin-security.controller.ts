@@ -53,10 +53,15 @@ export class AdminSecurityController {
     },
   ) {
 
+    const admin = await this.usersService.findById(
+      request.user.id,
+    );
+
     await this.adminOtpService.createOtp(
       request.user.id,
       AdminOtpPurpose.ChangePassword,
       request.user.email,
+      admin.name,
     );
 
 
@@ -141,9 +146,14 @@ export class AdminSecurityController {
 
   ) {
 
+    const admin = await this.usersService.findById(
+      request.user.id,
+    );
+
     await this.adminOtpService.createOldEmailChangeOtp(
       request.user.id,
       request.user.email,
+      admin.name,
     );
 
 
@@ -200,9 +210,14 @@ export class AdminSecurityController {
 
   ) {
 
+    const admin = await this.usersService.findById(
+      request.user.id,
+    );
+
     await this.adminOtpService.createNewEmailOtp(
       request.user.id,
       dto.newEmail,
+      admin.name,
     );
 
 

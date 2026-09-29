@@ -15,6 +15,7 @@ import { ProgressModule } from "./progress/progress.module";
 import { UploadsModule } from "./uploads/uploads.module";
 import { UsersModule } from "./users/users.module";
 import { AdminSecurityModule } from "./admin-security/admin-security.module";
+import { AuthSecurityModule } from "./auth-security/auth-security.module";
 import { VerificationModule } from "./verification/verification.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { CertificatesModule } from "./certificates/certificates.module";
@@ -43,6 +44,7 @@ import { WithdrawalsModule } from "./withdrawals/withdrawals.module";
     }),
 
     AuthModule,
+    AuthSecurityModule,
     UsersModule,
     CoursesModule,
     LessonsModule,

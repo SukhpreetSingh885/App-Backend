@@ -27,6 +27,9 @@ export class AdminOtpService {
 
   private readonly otpLifetimeMinutes = 5;
 
+  private readonly otpExpiredMessage =
+    "OTP has expired. Please request a new one.";
+
   private readonly maxAttempts = 5;
 
 
@@ -59,6 +62,8 @@ export class AdminOtpService {
 
     email: string,
 
+    name?: string,
+
   ) {
 
 
@@ -87,17 +92,6 @@ export class AdminOtpService {
         1000000,
       ).toString();
 
-
-
-
-    const otpHash =
-      await bcrypt.hash(
-        otp,
-        10,
-      );
-
-
-
     const expiresAt =
       new Date(
         Date.now() +
@@ -107,6 +101,13 @@ export class AdminOtpService {
       );
 
 
+
+
+    const otpHash =
+      await bcrypt.hash(
+        otp,
+        10,
+      );
 
     await this.adminOtpModel.create({
 
@@ -137,6 +138,8 @@ export class AdminOtpService {
 
       otp,
 
+      name,
+
     );
 
 
@@ -163,6 +166,8 @@ export class AdminOtpService {
 
     oldEmail: string,
 
+    name?: string,
+
   ) {
 
 
@@ -173,6 +178,8 @@ export class AdminOtpService {
       AdminOtpPurpose.VerifyOldEmail,
 
       oldEmail,
+
+      name,
 
     );
 
@@ -232,7 +239,7 @@ export class AdminOtpService {
 
     if (
       record.expiresAt.getTime()
-      < Date.now()
+      <= Date.now()
     ) {
 
 
@@ -242,7 +249,7 @@ export class AdminOtpService {
 
 
       throw new BadRequestException(
-        "Verification code expired",
+        this.otpExpiredMessage,
       );
 
     }
@@ -307,6 +314,8 @@ export class AdminOtpService {
 
     record.emailVerified = true;
 
+    record.used = true;
+
 
     await record.save();
 
@@ -337,6 +346,8 @@ export class AdminOtpService {
     adminId: string,
 
     newEmail: string,
+
+    name?: string,
 
   ) {
 
@@ -380,6 +391,8 @@ export class AdminOtpService {
       AdminOtpPurpose.VerifyNewEmail,
 
       newEmail,
+
+      name,
 
     );
 
@@ -451,7 +464,7 @@ export class AdminOtpService {
 
     if (
       record.expiresAt.getTime()
-      < Date.now()
+      <= Date.now()
     ) {
 
 
@@ -461,7 +474,7 @@ export class AdminOtpService {
 
 
       throw new BadRequestException(
-        "Verification code expired",
+        this.otpExpiredMessage,
       );
 
     }

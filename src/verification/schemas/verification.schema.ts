@@ -46,7 +46,12 @@ export class Verification {
   @Prop()
   otpHash?: string;
 
-  // Expiry time for email OTP.
+  // Exact time after which the active OTP must be rejected.
+  @Prop()
+  expiresAt?: Date;
+
+  // Kept temporarily so OTPs issued before the expiresAt migration
+  // can still expire safely instead of becoming unusable immediately.
   @Prop()
   otpExpiresAt?: Date;
 

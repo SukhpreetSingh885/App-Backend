@@ -22,6 +22,7 @@ export class VerificationController {
   ) {
     return this.verificationService.sendEmailOtp(
       dto.email,
+      dto.name,
     );
   }
 

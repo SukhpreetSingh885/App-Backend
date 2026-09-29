@@ -11,10 +11,29 @@ export class MailService {
     private readonly config: ConfigService,
   ) {}
 
+  private escapeHtml(value: string): string {
+    return value.replace(
+      /[&<>'"]/g,
+      (character) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          "'": "&#39;",
+          '"': "&quot;",
+        })[character] ?? character,
+    );
+  }
+
   async sendOtpEmail(
     email: string,
     otp: string,
+    name?: string,
   ) {
+    const recipientName = this.escapeHtml(
+      name?.trim() || email.split("@")[0] || "Admin",
+    );
+
     try {
       await axios.post(
         "https://api.brevo.com/v3/smtp/email",
@@ -38,17 +57,23 @@ export class MailService {
           ],
 
           subject:
-            "Viralstan Academy OTP Verification",
+            "Verify your Viralstan Academy account",
 
           htmlContent: `
-            <div>
-              <h2>Viralstan Academy</h2>
-
-              <p>Your OTP code is:</p>
-
-              <h1>${otp}</h1>
-
-              <p>This code expires in 5 minutes.</p>
+            <div style="font-family: Arial, sans-serif; color: #172033; line-height: 1.6; max-width: 600px; margin: 0 auto;">
+              <h2 style="margin-bottom: 24px;">Verify your Viralstan Academy account</h2>
+              <p>Hello ${recipientName},</p>
+              <p>Use the following OTP to verify your email address for Viralstan Academy.</p>
+              <p style="margin-bottom: 4px;">Your OTP:</p>
+              <p style="font-size: 32px; font-weight: 700; letter-spacing: 6px; margin: 0 0 20px;">${otp}</p>
+              <p>This OTP is valid for 5 minutes.</p>
+              <p style="margin-bottom: 4px;">For security reasons:</p>
+              <ul style="margin-top: 0;">
+                <li>Do not share this OTP with anyone.</li>
+                <li>Viralstan Academy will never ask for your OTP.</li>
+              </ul>
+              <p>If you did not request this verification, please ignore this email.</p>
+              <p>Thanks,<br />Viralstan Academy Team</p>
             </div>
           `,
         },

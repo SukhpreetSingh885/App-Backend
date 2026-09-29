@@ -84,7 +84,10 @@ export class UsersController {
     }
 
     return this.verificationService
-      .sendEmailChangeOtp(newEmail);
+      .sendEmailChangeOtp(
+        newEmail,
+        currentUser.name,
+      );
   }
 
   @Post("me/email/verify")

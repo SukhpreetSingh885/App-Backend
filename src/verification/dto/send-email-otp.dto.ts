@@ -1,7 +1,9 @@
 import {
   IsEmail,
   IsNotEmpty,
+  IsOptional,
   IsString,
+  MaxLength,
 } from "class-validator";
 
 export class SendEmailOtpDto {
@@ -9,4 +11,9 @@ export class SendEmailOtpDto {
   @IsNotEmpty()
   @IsEmail()
   email!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  name?: string;
 }

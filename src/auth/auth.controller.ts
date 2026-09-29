@@ -88,7 +88,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({
     default: {
-      limit: 5,
+      limit: 10,
       ttl: 600000,
     },
   })

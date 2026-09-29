@@ -19,6 +19,8 @@ import {
 @Injectable()
 export class VerificationService {
   private readonly OTP_EXPIRY_MINUTES = 5;
+  private readonly OTP_EXPIRED_MESSAGE =
+    "OTP has expired. Please request a new one.";
   private readonly RESEND_COOLDOWN_SECONDS = 60;
   private readonly MAX_ATTEMPTS = 5;
 
@@ -45,6 +47,15 @@ export class VerificationService {
 
   private normalizeMobile(mobile: string): string {
     return mobile.trim().replace(/\s+/g, "");
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 
   private checkResendCooldown(
@@ -76,6 +87,7 @@ export class VerificationService {
   private async sendBrevoEmailOtp(
     email: string,
     otp: string,
+    name?: string,
   ): Promise<void> {
     const apiKey =
       this.configService.get<string>(
@@ -102,6 +114,12 @@ export class VerificationService {
       );
     }
 
+    const recipientName = this.escapeHtml(
+      name?.trim() ||
+        email.split("@")[0] ||
+        "there",
+    );
+
     const response = await fetch(
       "https://api.brevo.com/v3/smtp/email",
       {
@@ -127,36 +145,50 @@ export class VerificationService {
           ],
 
           subject:
-            "Verify your Viralstan Academy email",
+            "Verify your Viralstan Academy account",
 
           htmlContent: `
-            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;">
-              <h2 style="color:#111827;">
-                Verify your email
-              </h2>
+            <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#1f2937;line-height:1.6;">
+              <h1 style="margin:0 0 24px;color:#111827;font-size:24px;">
+                Verify your Viralstan Academy account
+              </h1>
 
-              <p style="color:#475569;font-size:16px;">
+              <p style="margin:0 0 16px;">
+                Hello ${recipientName},
+              </p>
+
+              <p style="margin:0 0 20px;">
                 Use the following OTP to verify your email address for Viralstan Academy.
               </p>
 
-              <div
-                style="
-                  font-size:32px;
-                  font-weight:700;
-                  letter-spacing:8px;
-                  color:#2563EB;
-                  margin:24px 0;
-                "
-              >
+              <p style="margin:0 0 8px;font-weight:700;">
+                Your OTP:
+              </p>
+
+              <div style="margin:0 0 20px;padding:16px 20px;border:1px solid #d1d5db;border-radius:8px;color:#111827;background:#f9fafb;font-size:32px;font-weight:700;letter-spacing:8px;text-align:center;">
                 ${otp}
               </div>
 
-              <p style="color:#475569;">
-                This OTP is valid for ${this.OTP_EXPIRY_MINUTES} minutes.
+              <p style="margin:0 0 20px;">
+                This OTP is valid for 5 minutes.
               </p>
 
-              <p style="color:#64748B;font-size:14px;">
-                If you did not request this code, you can ignore this email.
+              <p style="margin:0 0 8px;font-weight:700;">
+                For security reasons:
+              </p>
+
+              <ul style="margin:0 0 20px;padding-left:22px;">
+                <li>Do not share this OTP with anyone.</li>
+                <li>Viralstan Academy will never ask for your OTP.</li>
+              </ul>
+
+              <p style="margin:0 0 20px;">
+                If you did not request this verification, please ignore this email.
+              </p>
+
+              <p style="margin:0;">
+                Thanks,<br />
+                Viralstan Academy Team
               </p>
             </div>
           `,
@@ -180,7 +212,10 @@ export class VerificationService {
     }
   }
 
-  async sendEmailOtp(email: string) {
+  async sendEmailOtp(
+    email: string,
+    name?: string,
+  ) {
     const identifier =
       this.normalizeEmail(email);
 
@@ -199,18 +234,18 @@ export class VerificationService {
     this.checkResendCooldown(existing);
 
     const otp = this.generateOtp();
-    const otpHash = this.hashOtp(otp);
-
-    const otpExpiresAt = new Date(
+    const expiresAt = new Date(
       Date.now() +
         this.OTP_EXPIRY_MINUTES *
           60 *
           1000,
     );
+    const otpHash = this.hashOtp(otp);
 
     await this.sendBrevoEmailOtp(
       identifier,
       otp,
+      name,
     );
 
     await this.verificationModel.findOneAndUpdate(
@@ -223,7 +258,7 @@ export class VerificationService {
           verified: false,
           verifiedAt: null,
           otpHash,
-          otpExpiresAt,
+          expiresAt,
           attempts: 0,
           lastSentAt: new Date(),
         },
@@ -267,20 +302,32 @@ export class VerificationService {
     }
 
     if (verification.verified) {
-      return {
-        verified: true,
-        message:
-          "Email already verified",
-      };
+      throw new BadRequestException(
+        "OTP has already been used. Please request a new one.",
+      );
     }
 
+    const expiresAt =
+      verification.expiresAt ??
+      verification.otpExpiresAt;
+
     if (
-      !verification.otpExpiresAt ||
-      verification.otpExpiresAt.getTime() <
-        Date.now()
+      !expiresAt ||
+      expiresAt.getTime() <= Date.now()
     ) {
+      await this.verificationModel.updateOne(
+        { _id: verification._id },
+        {
+          $unset: {
+            otpHash: 1,
+            expiresAt: 1,
+            otpExpiresAt: 1,
+          },
+        },
+      );
+
       throw new BadRequestException(
-        "OTP has expired. Please request a new OTP",
+        this.OTP_EXPIRED_MESSAGE,
       );
     }
 
@@ -329,6 +376,7 @@ export class VerificationService {
         },
         $unset: {
           otpHash: 1,
+          expiresAt: 1,
           otpExpiresAt: 1,
         },
       },
@@ -360,14 +408,13 @@ export class VerificationService {
     this.checkResendCooldown(existing);
 
     const otp = this.generateOtp();
-    const otpHash = this.hashOtp(otp);
-
-    const otpExpiresAt = new Date(
+    const expiresAt = new Date(
       Date.now() +
         this.OTP_EXPIRY_MINUTES *
           60 *
           1000,
     );
+    const otpHash = this.hashOtp(otp);
 
     await this.verificationModel.findOneAndUpdate(
       {
@@ -379,7 +426,7 @@ export class VerificationService {
           verified: false,
           verifiedAt: null,
           otpHash,
-          otpExpiresAt,
+          expiresAt,
           attempts: 0,
           lastSentAt: new Date(),
         },
@@ -427,20 +474,32 @@ export class VerificationService {
     }
 
     if (verification.verified) {
-      return {
-        verified: true,
-        message:
-          "Mobile number already verified",
-      };
+      throw new BadRequestException(
+        "OTP has already been used. Please request a new one.",
+      );
     }
 
+    const expiresAt =
+      verification.expiresAt ??
+      verification.otpExpiresAt;
+
     if (
-      !verification.otpExpiresAt ||
-      verification.otpExpiresAt.getTime() <
-        Date.now()
+      !expiresAt ||
+      expiresAt.getTime() <= Date.now()
     ) {
+      await this.verificationModel.updateOne(
+        { _id: verification._id },
+        {
+          $unset: {
+            otpHash: 1,
+            expiresAt: 1,
+            otpExpiresAt: 1,
+          },
+        },
+      );
+
       throw new BadRequestException(
-        "OTP has expired. Please request a new OTP",
+        this.OTP_EXPIRED_MESSAGE,
       );
     }
 
@@ -489,6 +548,7 @@ export class VerificationService {
         },
         $unset: {
           otpHash: 1,
+          expiresAt: 1,
           otpExpiresAt: 1,
         },
       },
@@ -500,7 +560,10 @@ export class VerificationService {
         "Mobile number verified successfully",
     };
   }
-async sendPasswordResetOtp(email: string) {
+async sendPasswordResetOtp(
+  email: string,
+  name?: string,
+) {
   const identifier =
     this.normalizeEmail(email);
 
@@ -513,16 +576,16 @@ async sendPasswordResetOtp(email: string) {
   this.checkResendCooldown(existing);
 
   const otp = this.generateOtp();
-  const otpHash = this.hashOtp(otp);
-
-  const otpExpiresAt = new Date(
+  const expiresAt = new Date(
     Date.now() +
       this.OTP_EXPIRY_MINUTES * 60 * 1000,
   );
+  const otpHash = this.hashOtp(otp);
 
   await this.sendBrevoEmailOtp(
     identifier,
     otp,
+    name,
   );
 
   await this.verificationModel.findOneAndUpdate(
@@ -535,7 +598,7 @@ async sendPasswordResetOtp(email: string) {
         verified: false,
         verifiedAt: null,
         otpHash,
-        otpExpiresAt,
+        expiresAt,
         attempts: 0,
         lastSentAt: new Date(),
       },
@@ -565,19 +628,45 @@ async verifyPasswordResetOtp(
       identifier,
     });
 
+  if (!otp?.trim()) {
+    throw new BadRequestException(
+      "OTP is required",
+    );
+  }
+
   if (!verification) {
     throw new BadRequestException(
       "Please request a password reset OTP first",
     );
   }
 
-  if (
-    !verification.otpExpiresAt ||
-    verification.otpExpiresAt.getTime() <
-      Date.now()
-  ) {
+  if (verification.verified) {
     throw new BadRequestException(
-      "OTP has expired. Please request a new OTP",
+      "OTP has already been used. Please request a new one.",
+    );
+  }
+
+  const expiresAt =
+    verification.expiresAt ??
+    verification.otpExpiresAt;
+
+  if (
+    !expiresAt ||
+    expiresAt.getTime() <= Date.now()
+  ) {
+    await this.verificationModel.updateOne(
+      { _id: verification._id },
+      {
+        $unset: {
+          otpHash: 1,
+          expiresAt: 1,
+          otpExpiresAt: 1,
+        },
+      },
+    );
+
+    throw new BadRequestException(
+      this.OTP_EXPIRED_MESSAGE,
     );
   }
 
@@ -625,6 +714,7 @@ async verifyPasswordResetOtp(
       },
       $unset: {
         otpHash: 1,
+        expiresAt: 1,
         otpExpiresAt: 1,
       },
     },
@@ -694,7 +784,10 @@ async consumePasswordResetVerification(
 
     return Boolean(verification);
   }
-  async sendEmailChangeOtp(email: string) {
+  async sendEmailChangeOtp(
+    email: string,
+    name?: string,
+  ) {
   const identifier =
     this.normalizeEmail(email);
 
@@ -713,16 +806,16 @@ async consumePasswordResetVerification(
   this.checkResendCooldown(existing);
 
   const otp = this.generateOtp();
-  const otpHash = this.hashOtp(otp);
-
-  const otpExpiresAt = new Date(
+  const expiresAt = new Date(
     Date.now() +
       this.OTP_EXPIRY_MINUTES * 60 * 1000,
   );
+  const otpHash = this.hashOtp(otp);
 
   await this.sendBrevoEmailOtp(
     identifier,
     otp,
+    name,
   );
 
   await this.verificationModel.findOneAndUpdate(
@@ -735,7 +828,7 @@ async consumePasswordResetVerification(
         verified: false,
         verifiedAt: null,
         otpHash,
-        otpExpiresAt,
+        expiresAt,
         attempts: 0,
         lastSentAt: new Date(),
       },
@@ -779,20 +872,32 @@ async verifyEmailChangeOtp(
   }
 
   if (verification.verified) {
-    return {
-      verified: true,
-      message:
-        "New email already verified",
-    };
+    throw new BadRequestException(
+      "OTP has already been used. Please request a new one.",
+    );
   }
 
+  const expiresAt =
+    verification.expiresAt ??
+    verification.otpExpiresAt;
+
   if (
-    !verification.otpExpiresAt ||
-    verification.otpExpiresAt.getTime() <
-      Date.now()
+    !expiresAt ||
+    expiresAt.getTime() <= Date.now()
   ) {
+    await this.verificationModel.updateOne(
+      { _id: verification._id },
+      {
+        $unset: {
+          otpHash: 1,
+          expiresAt: 1,
+          otpExpiresAt: 1,
+        },
+      },
+    );
+
     throw new BadRequestException(
-      "OTP has expired. Please request a new OTP",
+      this.OTP_EXPIRED_MESSAGE,
     );
   }
 
@@ -841,6 +946,7 @@ async verifyEmailChangeOtp(
       },
       $unset: {
         otpHash: 1,
+        expiresAt: 1,
         otpExpiresAt: 1,
       },
     },

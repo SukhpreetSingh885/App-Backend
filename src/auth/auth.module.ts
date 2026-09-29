@@ -8,9 +8,10 @@ import { UsersModule } from "../users/users.module";
 import { ReferralModule } from "../referrals/referral.module";
 import { VerificationModule } from "../verification/verification.module";
 import { NotificationsModule } from "../notifications/notifications.module";
-
+import { AuthSecurityModule } from "../auth-security/auth-security.module";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
+
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { JwtStrategy } from "./strategies/jwt.strategy";
 
@@ -33,7 +34,7 @@ import {
     VerificationModule,
 
     NotificationsModule,
-
+  AuthSecurityModule,
     ConfigModule,
 
     PassportModule.register({
