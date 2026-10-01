@@ -4,11 +4,13 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { PassportModule } from "@nestjs/passport";
 import { MongooseModule } from "@nestjs/mongoose";
 
+import { AuditModule } from "../audit/audit.module";
 import { UsersModule } from "../users/users.module";
 import { ReferralModule } from "../referrals/referral.module";
 import { VerificationModule } from "../verification/verification.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { AuthSecurityModule } from "../auth-security/auth-security.module";
+
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 
@@ -25,30 +27,45 @@ import {
   ReferralUsageSchema,
 } from "../referrals/schemas/referral-usage.schema";
 
+import {
+  RefreshToken,
+  RefreshTokenSchema,
+} from "./schemas/refresh-token.schema";
+
+
 @Module({
   imports: [
+
     forwardRef(() => UsersModule),
+
+    AuditModule,
 
     ReferralModule,
 
     VerificationModule,
 
     NotificationsModule,
-  AuthSecurityModule,
+
+    AuthSecurityModule,
+
     ConfigModule,
+
 
     PassportModule.register({
       defaultStrategy: "jwt",
     }),
 
+
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
+
       useFactory: (config: ConfigService) => ({
         secret:
           config.getOrThrow<string>(
             "JWT_SECRET",
           ),
+
         signOptions: {
           expiresIn:
             config.get<string>(
@@ -59,25 +76,38 @@ import {
       }),
     }),
 
+
     MongooseModule.forFeature([
       {
         name: ReferralCode.name,
         schema: ReferralCodeSchema,
       },
+
       {
         name: ReferralUsage.name,
         schema: ReferralUsageSchema,
       },
+
+      {
+        name: RefreshToken.name,
+        schema: RefreshTokenSchema,
+      },
     ]),
+
   ],
 
-  controllers: [AuthController],
+
+  controllers: [
+    AuthController,
+  ],
+
 
   providers: [
     AuthService,
     JwtStrategy,
     JwtAuthGuard,
   ],
+
 
   exports: [
     JwtAuthGuard,

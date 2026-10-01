@@ -1,6 +1,6 @@
 import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
-
+import { AuditModule } from "../audit/audit.module";
 import { CoursesController } from "./courses.controller";
 import { CoursesService } from "./courses.service";
 import { Course, CourseSchema } from "./schemas/course.schema";
@@ -12,7 +12,8 @@ import { UsersModule } from "../users/users.module";
 @Module({
   imports: [
     NotificationsModule,
-    UsersModule,
+  UsersModule,
+  AuditModule,
     MongooseModule.forFeature([
       {
         name: Course.name,

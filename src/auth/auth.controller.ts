@@ -5,7 +5,9 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
 } from "@nestjs/common";
+import { Request } from "express";
 
 import { Throttle } from "@nestjs/throttler";
 
@@ -16,7 +18,7 @@ import { RegisterDto } from "./dto/register.dto";
 import { ForgotPasswordSendOtpDto } from "./dto/forgot-password-send-otp.dto";
 import { ForgotPasswordVerifyOtpDto } from "./dto/forgot-password-verify-otp.dto";
 import { ForgotPasswordResetDto } from "./dto/forgot-password-reset.dto";
-
+import { RefreshTokenDto } from "./dto/refresh-token.dto";
 @Controller("auth")
 export class AuthController {
   constructor(
@@ -44,10 +46,50 @@ export class AuthController {
       ttl: 60000,
     },
   })
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+  ) {
+    const ipAddress =
+      req.ip ||
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      req.socket?.remoteAddress;
+    const userAgent = req.headers["user-agent"];
+    return this.authService.login(dto, { ipAddress, userAgent });
   }
+@Post("refresh")
+@HttpCode(HttpStatus.OK)
+@Throttle({
+  default: {
+    limit: 10,
+    ttl: 60000,
+  },
+})
+refresh(
+  @Body() dto: RefreshTokenDto,
+  @Req() req: Request,
+) {
 
+  const ipAddress =
+    req.ip ||
+    (req.headers["x-forwarded-for"] as string)
+      ?.split(",")[0]
+      ?.trim() ||
+    req.socket?.remoteAddress;
+
+
+  const userAgent =
+    req.headers["user-agent"];
+
+
+  return this.authService.refreshToken(
+    dto.refreshToken,
+    {
+      ipAddress,
+      userAgent,
+    },
+  );
+}
   // Send OTP: 3 requests per 10 minutes
   @Post("forgot-password/send-otp")
   @HttpCode(HttpStatus.OK)

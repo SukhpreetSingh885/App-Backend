@@ -1,18 +1,18 @@
-
-import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
-
+import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
+import { ValidationPipe,BadRequestException } from "@nestjs/common";
+import { RequestLoggingInterceptor } from "./common/interceptors/request-logging.interceptor";
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(
     AppModule,
     { rawBody: true },
   );
-
-  // Trust only the configured number of proxy hops.
-  // Disabled by default until the deployment is verified.
+app.useGlobalFilters(
+  new HttpExceptionFilter(),
+);
   const proxyHops = Number(process.env.TRUST_PROXY_HOPS ?? "0");
 
   if (!Number.isInteger(proxyHops) || proxyHops < 0 || proxyHops > 1) {
@@ -53,13 +53,28 @@ async function bootstrap() {
 
   // Global request validation
   app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
 
+    exceptionFactory: (errors) => {
+      return new BadRequestException(
+        errors
+          .map(
+            (error) =>
+              Object.values(
+                error.constraints ?? {},
+              ),
+          )
+          .flat(),
+      );
+    },
+  }),
+);
+app.useGlobalInterceptors(
+  new RequestLoggingInterceptor(),
+);
   // Start backend server
   await app.listen(process.env.PORT ?? 3000, "0.0.0.0");
 }

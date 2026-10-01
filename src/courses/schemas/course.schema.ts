@@ -118,7 +118,37 @@ export class Course {
   @Prop({ default: false })
   popular!: boolean;
 }
-
-
 export const CourseSchema =
   SchemaFactory.createForClass(Course);
+
+
+CourseSchema.index({
+  status: 1,
+});
+
+
+CourseSchema.index({
+  category: 1,
+});
+
+
+CourseSchema.index({
+  featured: 1,
+});
+
+
+CourseSchema.index({
+  popular: 1,
+});
+
+
+CourseSchema.index({
+  createdAt: -1,
+});
+
+
+CourseSchema.index({
+  status: 1,
+  category: 1,
+  createdAt: -1,
+});

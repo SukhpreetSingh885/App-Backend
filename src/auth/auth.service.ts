@@ -19,17 +19,10 @@ import { JwtService } from "@nestjs/jwt";
 import { compare, hash } from "bcryptjs";
 
 import { UserRole } from "../common/enums/user-role.enum";
-import { UsersService } from "../users/users.service";
-import { ReferralService } from "../referrals/referral.service";
-import { VerificationService } from "../verification/verification.service";
-import { NotificationsService } from "../notifications/notifications.service";
-import {
-  NotificationRecipientType,
-  NotificationType,
-} from "../notifications/schemas/notification.schema";
 
-import { LoginDto } from "./dto/login.dto";
-import { RegisterDto } from "./dto/register.dto";
+import { UsersService } from "../users/users.service";
+
+import { ReferralService } from "../referrals/referral.service";
 
 import {
   ReferralCode,
@@ -41,27 +34,67 @@ import {
   ReferralUsageDocument,
   ReferralUsageStatus,
 } from "../referrals/schemas/referral-usage.schema";
+
+import { VerificationService } from "../verification/verification.service";
+
+import { NotificationsService } from "../notifications/notifications.service";
+
+import {
+  NotificationRecipientType,
+  NotificationType,
+} from "../notifications/schemas/notification.schema";
+
 import { AuthSecurityService } from "../auth-security/auth-security.service";
+
+import { AuditService } from "../audit/audit.service";
+
+import {
+  RefreshToken,
+  RefreshTokenDocument,
+} from "./schemas/refresh-token.schema";
+
+import { LoginDto } from "./dto/login.dto";
+import { RegisterDto } from "./dto/register.dto";
+
+import * as crypto from "crypto";
+
+
 @Injectable()
 export class AuthService {
+
   private readonly logger =
     new Logger(AuthService.name);
 
+
   constructor(
+
     @InjectConnection()
     private readonly connection: Connection,
 
-    private readonly usersService: UsersService,
+    private readonly usersService:
+      UsersService,
 
-    private readonly jwtService: JwtService,
-    private readonly authSecurityService: AuthSecurityService,
+    private readonly jwtService:
+      JwtService,
 
-    private readonly referralService: ReferralService,
+    private readonly authSecurityService:
+      AuthSecurityService,
 
-    private readonly verificationService: VerificationService,
+    private readonly referralService:
+      ReferralService,
+
+    private readonly verificationService:
+      VerificationService,
 
     private readonly notificationsService:
       NotificationsService,
+
+    @InjectModel(RefreshToken.name)
+    private readonly refreshTokenModel:
+      Model<RefreshTokenDocument>,
+
+    private readonly auditService:
+      AuditService,
 
     @InjectModel(ReferralCode.name)
     private readonly referralCodeModel:
@@ -70,56 +103,80 @@ export class AuthService {
     @InjectModel(ReferralUsage.name)
     private readonly referralUsageModel:
       Model<ReferralUsageDocument>,
+
   ) {}
 
+
+
   async register(dto: RegisterDto) {
+
     if (
       await this.usersService.existsByEmail(
         dto.email,
       )
     ) {
+
       throw new ConflictException(
         "An account with this email already exists",
       );
+
     }
 
+
     const emailVerified =
-      await this.verificationService.isEmailVerified(
-        dto.email,
-      );
+      await this.verificationService
+        .isEmailVerified(
+          dto.email,
+        );
+
 
     if (!emailVerified) {
+
       throw new UnauthorizedException(
         "Please verify your email before creating an account",
       );
+
     }
+
 
     const countryCode =
       dto.countryCode.trim();
 
+
     const mobile =
       dto.mobile.trim();
+
 
     const phoneNumber =
       `${countryCode}${mobile}`;
 
+
     if (
-      await this.usersService.existsByPhoneNumber(
-        phoneNumber,
-      )
+      await this.usersService
+        .existsByPhoneNumber(
+          phoneNumber,
+        )
     ) {
+
       throw new ConflictException(
         "Mobile number already registered",
       );
+
     }
 
+
     const passwordHash =
-      await hash(dto.password, 12);
+      await hash(
+        dto.password,
+        12,
+      );
+
 
     const referralCode =
       dto.referralCode
         ?.trim()
         .toUpperCase();
+
 
     const rewardAmount =
       referralCode
@@ -127,21 +184,31 @@ export class AuthService {
             .getRewardAmount()
         : 0;
 
+
     const session =
       await this.connection.startSession();
 
+
     try {
+
       let user:
         Awaited<
-          ReturnType<UsersService["create"]>
+          ReturnType<
+            UsersService["create"]
+          >
         > | undefined;
+
 
       await session.withTransaction(
         async () => {
+
           let referralCodeData:
-            ReferralCodeDocument | null = null;
+            ReferralCodeDocument | null =
+            null;
+
 
           if (referralCode) {
+
             referralCodeData =
               await this.referralCodeModel
                 .findOneAndUpdate(
@@ -161,12 +228,17 @@ export class AuthService {
                 )
                 .exec();
 
+
             if (!referralCodeData) {
+
               throw new ConflictException(
                 "Invalid or already used referral code",
               );
+
             }
+
           }
+
 
           user =
             await this.usersService.create(
@@ -182,7 +254,9 @@ export class AuthService {
               session,
             );
 
+
           if (referralCodeData) {
+
             await this.referralUsageModel.create(
               [
                 {
@@ -207,33 +281,59 @@ export class AuthService {
                 session,
               },
             );
+
           }
+
         },
       );
 
+
       if (!user) {
+
         throw new Error(
           "Registration transaction did not create a user",
         );
+
       }
+
 
       const accessToken =
         await this.sign(user);
+
 
       await this.notifyAdminsOfRegistration(
         user.id,
         user.name,
       );
 
-      return { user, accessToken };
+
+      return {
+        user,
+        accessToken,
+      };
+
+
     } finally {
+
       await session.endSession();
+
     }
+
   }
 
-  async login(dto: LoginDto) {
+
+
+  async login(
+    dto: LoginDto,
+    clientInfo?: {
+      ipAddress?: string;
+      userAgent?: string;
+    },
+  ) {
+
     const identifier =
       dto.identifier.trim();
+
 
     const user =
       identifier.includes("@")
@@ -245,135 +345,393 @@ export class AuthService {
             .findByPhoneNumberWithPassword(
               identifier,
             );
-if (user) {
-  const security =
-    await this.authSecurityService
-      .getOrCreate(user.id);
 
-  if (
-    security.lockUntil &&
-    security.lockUntil > new Date()
-  ) {
-    throw new UnauthorizedException(
-      "Account temporarily locked. Please try again later.",
-    );
-  }
-}
-const isPasswordValid =
-  user &&
-  await compare(
-    dto.password,
-    user.password,
-  );
 
-if (!user || !isPasswordValid) {
 
-  if (user) {
-    await this.authSecurityService
-      .recordFailedLogin(user.id);
-  }
+    if (user) {
 
-  throw new UnauthorizedException(
-    "Invalid email/mobile or password",
-  );
-}
+      const security =
+        await this.authSecurityService
+          .getOrCreate(user.id);
 
+
+      if (
+        security.lockUntil &&
+        security.lockUntil > new Date()
+      ) {
+
+        throw new UnauthorizedException(
+          "Account temporarily locked. Please try again later.",
+        );
+
+      }
+
+    }
+
+
+    
+    const isPasswordValid =
+      user &&
+      await compare(
+        dto.password,
+        user.password,
+      );
+
+
+    if (
+      !user ||
+      !isPasswordValid
+    ) {
+
+      if (user) {
+
+        await this.authSecurityService
+          .recordFailedLogin(
+            user.id,
+          );
+
+      }
+
+
+      throw new UnauthorizedException(
+        "Invalid email/mobile or password",
+      );
+
+    }
     const {
       password: _password,
       ...publicUser
     } = user;
-await this.authSecurityService.resetFailedAttempts(
-  user.id,
-);
+
+    await this.authSecurityService
+      .resetFailedAttempts(
+        user.id,
+      );
+
+    if (
+      user.role === UserRole.Admin
+    ) {
+
+      await this.auditService.createAuditLog({
+
+        actorId:
+          user.id,
+
+        action:
+          "ADMIN_LOGIN",
+
+        module:
+          "AUTH",
+
+        description:
+          `Admin login successful: ${user.email}`,
+
+        ipAddress:
+          clientInfo?.ipAddress,
+
+        userAgent:
+          clientInfo?.userAgent,
+
+      });
+
+    }
+
+
+    const accessToken =
+      await this.sign(
+        publicUser,
+      );
+
+    const refreshToken =
+      await this.createRefreshToken(
+        user.id,
+        {
+          ipAddress:
+            clientInfo?.ipAddress,
+
+          userAgent:
+            clientInfo?.userAgent,
+        },
+      );
+
+
     return {
-      user: publicUser,
-      accessToken:
-        await this.sign(publicUser),
+
+      user:
+        publicUser,
+
+      accessToken,
+
+      refreshToken,
+
     };
-  }
-async sendForgotPasswordOtp(
-  email: string,
-) {
-  const user =
-    await this.usersService
-      .findByEmailWithPassword(email);
 
-  if (!user) {
-    throw new UnauthorizedException(
-      "No account found with this email",
-    );
   }
 
-  await this.verificationService
-    .sendPasswordResetOtp(
-      email,
-      user.name,
-    );
 
-  return {
-    message:
-      "Password reset OTP sent successfully",
-  };
-}
+  async refreshToken(
+    refreshToken: string,
+    clientInfo?: {
+      ipAddress?: string;
+      userAgent?: string;
+    },
+  ) {
 
-async verifyForgotPasswordOtp(
-  email: string,
-  otp: string,
-) {
-  const user =
-    await this.usersService
-      .findByEmailWithPassword(email);
+    const [
+      tokenId,
+      secret,
+    ] =
+      refreshToken.split(".");
 
-  if (!user) {
-    throw new UnauthorizedException(
-      "No account found with this email",
-    );
+
+    if (
+      !tokenId ||
+      !secret
+    ) {
+
+      throw new UnauthorizedException(
+        "Invalid refresh token",
+      );
+
+    }
+
+
+    
+    const storedToken =
+      await this.refreshTokenModel
+        .findOne({
+          tokenId,
+          revoked: false,
+        })
+        .exec();
+
+
+    if (!storedToken) {
+
+      throw new UnauthorizedException(
+        "Refresh token not found",
+      );
+
+    }
+
+    if (
+      storedToken.expiresAt <
+      new Date()
+    ) {
+
+      throw new UnauthorizedException(
+        "Refresh token expired",
+      );
+
+    }
+
+
+ 
+    const isValid =
+      await compare(
+        secret,
+        storedToken.tokenHash,
+      );
+
+
+    if (!isValid) {
+
+      throw new UnauthorizedException(
+        "Invalid refresh token",
+      );
+
+    }
+
+
+    const user =
+      await this.usersService.findById(
+        storedToken.userId.toString(),
+      );
+
+
+
+    storedToken.revoked = true;
+
+    await storedToken.save();
+
+    const newRefreshToken =
+      await this.createRefreshToken(
+        user.id,
+        {
+          ipAddress:
+            clientInfo?.ipAddress,
+
+          userAgent:
+            clientInfo?.userAgent,
+        },
+      );
+
+    const accessToken =
+      await this.sign(user);
+
+
+
+    return {
+
+      accessToken,
+
+      refreshToken:
+        newRefreshToken,
+
+    };
+
   }
 
-  return this.verificationService
-    .verifyPasswordResetOtp(
-      email,
-      otp,
-    );
-}
+  async sendForgotPasswordOtp(
+    email: string,
+  ) {
 
-async resetForgotPassword(
-  email: string,
-  password: string,
-) {
-  const user =
-    await this.usersService
-      .findByEmailWithPassword(email);
+    const user =
+      await this.usersService
+        .findByEmailWithPassword(
+          email,
+        );
 
-  if (!user) {
-    throw new UnauthorizedException(
-      "No account found with this email",
-    );
-  }
 
-  const verified =
+    if (!user) {
+
+      throw new UnauthorizedException(
+        "No account found with this email",
+      );
+
+    }
+
+
     await this.verificationService
-      .isPasswordResetVerified(email);
+      .sendPasswordResetOtp(
+        email,
+        user.name,
+      );
 
-  if (!verified) {
-    throw new UnauthorizedException(
-      "Please verify the password reset OTP first",
-    );
+
+    return {
+
+      message:
+        "Password reset OTP sent successfully",
+
+    };
+
   }
 
-  await this.usersService.changePassword(
-    user.id,
-    password,
-  );
 
-  await this.verificationService
-    .consumePasswordResetVerification(email);
+  async verifyForgotPasswordOtp(
+    email: string,
+    otp: string,
+  ) {
 
-  return {
-    message:
-      "Password reset successfully",
-  };
-}
+    const user =
+      await this.usersService
+        .findByEmailWithPassword(
+          email,
+        );
+
+
+    if (!user) {
+
+      throw new UnauthorizedException(
+        "No account found with this email",
+      );
+
+    }
+
+
+    return this.verificationService
+      .verifyPasswordResetOtp(
+        email,
+        otp,
+      );
+
+  }
+
+  async resetForgotPassword(
+    email: string,
+    password: string,
+  ) {
+
+    const user =
+      await this.usersService
+        .findByEmailWithPassword(
+          email,
+        );
+
+
+    if (!user) {
+
+      throw new UnauthorizedException(
+        "No account found with this email",
+      );
+
+    }
+
+
+    const verified =
+      await this.verificationService
+        .isPasswordResetVerified(
+          email,
+        );
+
+
+    if (!verified) {
+
+      throw new UnauthorizedException(
+        "Please verify the password reset OTP first",
+      );
+
+    }
+
+
+    await this.usersService.changePassword(
+      user.id,
+      password,
+    );
+
+
+    if (
+      user.role === UserRole.Admin
+    ) {
+
+      await this.auditService.createAuditLog({
+
+        actorId:
+          user.id,
+
+        action:
+          "PASSWORD_CHANGED",
+
+        module:
+          "SECURITY",
+
+        targetId:
+          user.id,
+
+        description:
+          "Admin password reset via forgot-password OTP",
+
+      });
+
+    }
+
+
+    await this.verificationService
+      .consumePasswordResetVerification(
+        email,
+      );
+
+
+    return {
+
+      message:
+        "Password reset successfully",
+
+    };
+
+  }
+
   private sign(
     user: {
       id: string;
@@ -381,43 +739,167 @@ async resetForgotPassword(
       role: UserRole;
     },
   ): Promise<string> {
+
     return this.jwtService.signAsync({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
+
+      sub:
+        user.id,
+
+      email:
+        user.email,
+
+      role:
+        user.role,
+
     });
+
   }
 
+  private generateRefreshToken() {
+
+    const tokenId =
+      crypto.randomUUID();
+
+
+    const secret =
+      crypto.randomUUID();
+
+
+    const refreshToken =
+      `${tokenId}.${secret}`;
+
+
+    return {
+
+      refreshToken,
+
+      tokenId,
+
+      secret,
+
+    };
+
+  }
+  private async createRefreshToken(
+    userId: string,
+    options?: {
+      ipAddress?: string;
+      userAgent?: string;
+      deviceInfo?: string;
+    },
+  ) {
+
+    const {
+      refreshToken,
+      tokenId,
+      secret,
+    } =
+      this.generateRefreshToken();
+
+    const tokenHash =
+      await hash(
+        secret,
+        12,
+      );
+
+    const expiresAt =
+      new Date(
+        Date.now()
+        +
+        30 *
+        24 *
+        60 *
+        60 *
+        1000,
+      );
+
+    await this.refreshTokenModel.create({
+
+      userId,
+
+      tokenId,
+
+      tokenHash,
+
+      expiresAt,
+
+      revoked:
+        false,
+
+      ipAddress:
+        options?.ipAddress,
+
+      userAgent:
+        options?.userAgent,
+
+      deviceInfo:
+        options?.deviceInfo,
+
+    })
+    return refreshToken;
+
+  }
   private async notifyAdminsOfRegistration(
     studentId: string,
     studentName: string,
   ) {
+
     try {
+
       const adminIds =
-        await this.usersService.findIdsByRole(
-          UserRole.Admin,
+        await this.usersService
+          .findIdsByRole(
+            UserRole.Admin,
+          );
+
+
+      await this.notificationsService
+        .createMany(
+
+          adminIds.map(
+            (adminId) => ({
+
+              recipientId:
+                adminId,
+
+              recipientType:
+                NotificationRecipientType.Admin,
+
+              type:
+                NotificationType.StudentRegistered,
+
+              title:
+                "New Student",
+
+              message:
+                `${studentName} registered for Viralstan Academy.`,
+
+              data: {
+                studentId,
+              },
+
+              eventKey:
+                `student-registered:${studentId}`,
+
+            }),
+          ),
+
         );
 
-      await this.notificationsService.createMany(
-        adminIds.map((adminId) => ({
-          recipientId: adminId,
-          recipientType:
-            NotificationRecipientType.Admin,
-          type: NotificationType.StudentRegistered,
-          title: "New Student",
-          message: `${studentName} registered for Viralstan Academy.`,
-          data: { studentId },
-          eventKey:
-            `student-registered:${studentId}`,
-        })),
-      );
     } catch (error) {
+
       this.logger.error(
+
         "Failed to create registration notifications",
+
         error instanceof Error
           ? error.stack
           : String(error),
+
       );
+
     }
+
   }
+
 }

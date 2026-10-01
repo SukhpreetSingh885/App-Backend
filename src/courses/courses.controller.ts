@@ -7,7 +7,7 @@
   import { CreateCourseDto } from "./dto/create-course.dto";
   import { UpdateCourseDto } from "./dto/update-course.dto";
   import { CoursesService } from "./courses.service";
-
+import { Request } from "express";
   @Controller("courses")
   export class CoursesController {
     constructor(private readonly coursesService: CoursesService) {}
@@ -21,7 +21,7 @@
     @Post()
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.Admin)
-    create(@Body() dto: CreateCourseDto) { return this.coursesService.create(dto); }
+    create(@Body() dto: CreateCourseDto ) { return this.coursesService.create(dto); }
 
     @Patch(":id")
     @UseGuards(JwtAuthGuard, RolesGuard)

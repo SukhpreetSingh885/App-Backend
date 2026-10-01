@@ -3,17 +3,27 @@ import { HydratedDocument } from "mongoose";
 
 import { EnrollmentStatus } from "../interfaces/enrollment.interface";
 
-export type EnrollmentDocument = HydratedDocument<Enrollment>;
+export type EnrollmentDocument =
+  HydratedDocument<Enrollment>;
 
-@Schema({ timestamps: true })
+@Schema({
+  timestamps: true,
+})
 export class Enrollment {
-  @Prop({ required: true, index: true })
+  @Prop({
+    required: true,
+  })
   userId!: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({
+    required: true,
+    index: true,
+  })
   courseId!: string;
 
-  @Prop({ required: true })
+  @Prop({
+    required: true,
+  })
   enrollmentDate!: Date;
 
   @Prop({
@@ -22,9 +32,18 @@ export class Enrollment {
   })
   status!: EnrollmentStatus;
 
-  @Prop({ index: true, unique: true, sparse: true })
+  @Prop({
+    index: true,
+    unique: true,
+    sparse: true,
+  })
   sourcePaymentIntentId?: string;
 }
 
-export const EnrollmentSchema = SchemaFactory.createForClass(Enrollment);
-EnrollmentSchema.index({ userId: 1, courseId: 1 });
+export const EnrollmentSchema =
+  SchemaFactory.createForClass(Enrollment);
+
+EnrollmentSchema.index({
+  userId: 1,
+  courseId: 1,
+});

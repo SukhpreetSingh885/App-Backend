@@ -49,4 +49,15 @@ export class User {
   updatedAt!: Date;
 }
 
-export const UserSchema = SchemaFactory.createForClass(User);
+export const UserSchema =
+  SchemaFactory.createForClass(User);
+
+
+UserSchema.index({
+  role: 1,
+});
+
+
+UserSchema.index({
+  createdAt: -1,
+});

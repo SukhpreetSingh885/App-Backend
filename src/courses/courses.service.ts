@@ -5,7 +5,7 @@ import {
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
-
+import { AuditService } from "../audit/audit.service";
 import { Lesson as LessonDocument } from "../lessons/schemas/lesson.schema";
 import { CreateCourseDto } from "./dto/create-course.dto";
 import { UpdateCourseDto } from "./dto/update-course.dto";
@@ -32,6 +32,7 @@ export class CoursesService {
     private readonly usersService: UsersService,
     private readonly notificationsService:
       NotificationsService,
+        private readonly auditService: AuditService,
   ) {}
 
   async create(dto: CreateCourseDto) {
