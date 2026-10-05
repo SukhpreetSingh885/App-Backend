@@ -1,20 +1,35 @@
-  import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 
-  import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
-  import { Roles } from "../common/decorators/roles.decorator";
-  import { UserRole } from "../common/enums/user-role.enum";
-  import { RolesGuard } from "../common/guards/roles.guard";
-  import { CreateCourseDto } from "./dto/create-course.dto";
-  import { UpdateCourseDto } from "./dto/update-course.dto";
-  import { CoursesService } from "./courses.service";
-import { Request } from "express";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { Roles } from "../common/decorators/roles.decorator";
+import { UserRole } from "../common/enums/user-role.enum";
+import { RolesGuard } from "../common/guards/roles.guard";
+
+import { CreateCourseDto } from "./dto/create-course.dto";
+import { UpdateCourseDto } from "./dto/update-course.dto";
+import { CourseQueryDto } from "./dto/course-query.dto";
+import { CoursesService } from "./courses.service";
+
   @Controller("courses")
   export class CoursesController {
     constructor(private readonly coursesService: CoursesService) {}
 
-    @Get()
-    findAll() { return this.coursesService.findAll(); }
-
+  @Get()
+findAll(@Query() query: CourseQueryDto) {
+  return this.coursesService.findAllPaginated(query);
+}
     @Get(":id")
     findOne(@Param("id") id: string) { return this.coursesService.findOne(id); }
 

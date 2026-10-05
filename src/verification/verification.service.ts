@@ -9,6 +9,7 @@ import { InjectModel } from "@nestjs/mongoose";
 import { ConfigService } from "@nestjs/config";
 import { Model } from "mongoose";
 import * as crypto from "crypto";
+import { MailService } from "../mail/mail.service";
 
 import {
   Verification,
@@ -28,6 +29,7 @@ export class VerificationService {
     @InjectModel(Verification.name)
     private readonly verificationModel: Model<VerificationDocument>,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) {}
 
   private generateOtp(): string {
@@ -120,19 +122,8 @@ export class VerificationService {
         "there",
     );
 
-    const response = await fetch(
-      "https://api.brevo.com/v3/smtp/email",
+    await this.mailService.queueEmail(
       {
-        method: "POST",
-
-        headers: {
-          accept: "application/json",
-          "api-key": apiKey,
-          "content-type":
-            "application/json",
-        },
-
-        body: JSON.stringify({
           sender: {
             name: senderName,
             email: senderEmail,
@@ -192,24 +183,9 @@ export class VerificationService {
               </p>
             </div>
           `,
-        }),
       },
+      `verification-otp:${email}:${otp}`,
     );
-
-    if (!response.ok) {
-      const errorBody =
-        await response.text();
-
-      console.error(
-        "Brevo email error:",
-        response.status,
-        errorBody,
-      );
-
-      throw new InternalServerErrorException(
-        "Unable to send verification email",
-      );
-    }
   }
 
   async sendEmailOtp(

@@ -10,6 +10,7 @@ import { UserRole } from "../common/enums/user-role.enum";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { PublicUser, User as UserEntity } from "./interfaces/user.interface";
 import { User, UserDocument } from "./schemas/user.schema";
+import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 import * as bcrypt from "bcrypt";
 type CreateInput = {
   name: string;
@@ -66,7 +67,47 @@ const user = users[0];
     const users = await this.userModel.find().lean().exec();
     return users.map((user) => this.toPublic(user));
   }
+async findAllPaginated(query: PaginationQueryDto) {
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 20;
 
+  const skip = (page - 1) * limit;
+
+  const [users, total] = await Promise.all([
+    this.userModel
+      .find()
+      .sort({ _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean()
+      .exec(),
+
+    this.userModel
+      .countDocuments()
+      .exec(),
+  ]);
+
+  const data = users.map((user) =>
+    this.toPublic(user),
+  );
+
+  const totalPages =
+    total === 0
+      ? 0
+      : Math.ceil(total / limit);
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    },
+  };
+}
   async findIdsByRole(
     role: UserRole,
   ): Promise<string[]> {

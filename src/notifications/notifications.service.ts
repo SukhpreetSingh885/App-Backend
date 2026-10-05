@@ -2,7 +2,9 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { InjectQueue } from "@nestjs/bullmq";
 import { InjectModel } from "@nestjs/mongoose";
+import { Queue } from "bullmq";
 import {
   isValidObjectId,
   Model,
@@ -15,6 +17,14 @@ import {
   NotificationRecipientType,
   NotificationType,
 } from "./schemas/notification.schema";
+import {
+  CREATE_NOTIFICATION_JOB,
+  createNotificationJobData,
+  notificationJobId,
+  notificationJobOptions,
+  NotificationJobData,
+  NOTIFICATIONS_QUEUE,
+} from "./notifications.queue";
 
 export type CreateNotificationInput = {
   recipientId: string;
@@ -29,36 +39,24 @@ export type CreateNotificationInput = {
 @Injectable()
 export class NotificationsService {
   constructor(
+    @InjectQueue(NOTIFICATIONS_QUEUE)
+    private readonly notificationsQueue:
+      Queue<NotificationJobData>,
     @InjectModel(Notification.name)
     private readonly notificationModel:
       Model<NotificationDocument>,
   ) {}
 
   async create(input: CreateNotificationInput) {
-    const notification =
-      this.toPersistenceObject(input);
+    const data = createNotificationJobData(input);
 
-    if (input.eventKey) {
-      return this.notificationModel
-        .findOneAndUpdate(
-          {
-            recipientId:
-              notification.recipientId,
-            eventKey: input.eventKey,
-          },
-          {
-            $setOnInsert: notification,
-          },
-          {
-            new: true,
-            upsert: true,
-          },
-        )
-        .exec();
-    }
-
-    return this.notificationModel.create(
-      notification,
+    await this.notificationsQueue.add(
+      CREATE_NOTIFICATION_JOB,
+      data,
+      {
+        ...notificationJobOptions,
+        jobId: notificationJobId(data),
+      },
     );
   }
 
@@ -69,37 +67,49 @@ export class NotificationsService {
       return;
     }
 
-    const operations = inputs.map((input) => {
-      const notification =
-        this.toPersistenceObject(input);
+    await this.notificationsQueue.addBulk(
+      inputs.map((input) => {
+        const data =
+          createNotificationJobData(input);
 
-      if (input.eventKey) {
         return {
-          updateOne: {
-            filter: {
-              recipientId:
-                notification.recipientId,
-              eventKey: input.eventKey,
-            },
-            update: {
-              $setOnInsert: notification,
-            },
-            upsert: true,
+          name: CREATE_NOTIFICATION_JOB,
+          data,
+          opts: {
+            ...notificationJobOptions,
+            jobId: notificationJobId(data),
           },
         };
-      }
-
-      return {
-        insertOne: {
-          document: notification,
-        },
-      };
-    });
-
-    await this.notificationModel.bulkWrite(
-      operations,
-      { ordered: false },
+      }),
     );
+  }
+
+  async persistQueuedNotification(
+    input: CreateNotificationInput,
+    idempotencyKey: string,
+  ) {
+    const persistedInput = {
+      ...input,
+      eventKey: input.eventKey ?? idempotencyKey,
+    };
+    const notification =
+      this.toPersistenceObject(persistedInput);
+
+    await this.notificationModel
+      .findOneAndUpdate(
+        {
+          recipientId: notification.recipientId,
+          eventKey: persistedInput.eventKey,
+        },
+        {
+          $setOnInsert: notification,
+        },
+        {
+          returnDocument: "after",
+          upsert: true,
+        },
+      )
+      .exec();
   }
 
   async findForRecipient(

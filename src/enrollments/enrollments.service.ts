@@ -8,7 +8,7 @@ import {
 
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
-
+import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 import { CoursesService } from "../courses/courses.service";
 import { ReferralService } from "../referrals/referral.service";
 import { WalletService } from "../wallet/wallet.service";
@@ -484,7 +484,43 @@ private async notifyReferralReward(
 
   }
 
+async findAllPaginated(query: PaginationQueryDto) {
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 20;
 
+  const skip = (page - 1) * limit;
+
+  const [enrollments, total] = await Promise.all([
+    this.enrollmentModel
+      .find()
+      .sort({ _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean()
+      .exec(),
+
+    this.enrollmentModel
+      .countDocuments()
+      .exec(),
+  ]);
+
+  const totalPages =
+    total === 0
+      ? 0
+      : Math.ceil(total / limit);
+
+  return {
+    data: enrollments,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    },
+  };
+}
 
 
   async requireActive(

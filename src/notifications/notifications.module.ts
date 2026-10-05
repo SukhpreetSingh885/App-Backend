@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { BullModule } from "@nestjs/bullmq";
 import { MongooseModule } from "@nestjs/mongoose";
 
 import { AdminGuard } from "../admin/guards/admin.guard";
@@ -9,6 +10,8 @@ import {
   NotificationsController,
 } from "./notifications.controller";
 import { NotificationsService } from "./notifications.service";
+import { NotificationsProcessor } from "./notifications.processor";
+import { NOTIFICATIONS_QUEUE } from "./notifications.queue";
 import {
   Notification,
   NotificationSchema,
@@ -16,6 +19,9 @@ import {
 
 @Module({
   imports: [
+    BullModule.registerQueue({
+      name: NOTIFICATIONS_QUEUE,
+    }),
     MongooseModule.forFeature([
       {
         name: Notification.name,
@@ -29,6 +35,7 @@ import {
   ],
   providers: [
     NotificationsService,
+    NotificationsProcessor,
     JwtAuthGuard,
     RolesGuard,
     AdminGuard,

@@ -1,6 +1,16 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { InjectQueue } from "@nestjs/bullmq";
 import { ConfigService } from "@nestjs/config";
 import axios from "axios";
+import { Queue } from "bullmq";
+
+import {
+  EMAIL_QUEUE,
+  emailJobId,
+  emailJobOptions,
+  EmailJobData,
+  SEND_EMAIL_JOB,
+} from "./mail.queue";
 
 @Injectable()
 export class MailService {
@@ -9,6 +19,9 @@ export class MailService {
 
   constructor(
     private readonly config: ConfigService,
+    @InjectQueue(EMAIL_QUEUE)
+    private readonly emailQueue:
+      Queue<EmailJobData>,
   ) {}
 
   private escapeHtml(value: string): string {
@@ -34,32 +47,22 @@ export class MailService {
       name?.trim() || email.split("@")[0] || "Admin",
     );
 
-    try {
-      await axios.post(
-        "https://api.brevo.com/v3/smtp/email",
-        {
-          sender: {
-            name:
-              this.config.get<string>(
-                "BREVO_SENDER_NAME",
-              ) ?? "Viralstan Academy",
-
-            email:
-              this.config.getOrThrow<string>(
-                "BREVO_SENDER_EMAIL",
-              ),
-          },
-
-          to: [
-            {
-              email,
-            },
-          ],
-
-          subject:
-            "Verify your Viralstan Academy account",
-
-          htmlContent: `
+    await this.queueEmail(
+      {
+        sender: {
+          name:
+            this.config.get<string>(
+              "BREVO_SENDER_NAME",
+            ) ?? "Viralstan Academy",
+          email:
+            this.config.getOrThrow<string>(
+              "BREVO_SENDER_EMAIL",
+            ),
+        },
+        to: [{ email }],
+        subject:
+          "Verify your Viralstan Academy account",
+        htmlContent: `
             <div style="font-family: Arial, sans-serif; color: #172033; line-height: 1.6; max-width: 600px; margin: 0 auto;">
               <h2 style="margin-bottom: 24px;">Verify your Viralstan Academy account</h2>
               <p>Hello ${recipientName},</p>
@@ -76,16 +79,43 @@ export class MailService {
               <p>Thanks,<br />Viralstan Academy Team</p>
             </div>
           `,
-        },
+      },
+      `admin-otp:${email}:${otp}`,
+    );
+  }
+
+  async queueEmail(
+    email: EmailJobData,
+    idempotencyKey?: string,
+  ) {
+    this.config.getOrThrow<string>(
+      "BREVO_API_KEY",
+    );
+
+    await this.emailQueue.add(
+      SEND_EMAIL_JOB,
+      email,
+      {
+        ...emailJobOptions,
+        jobId: emailJobId(idempotencyKey),
+      },
+    );
+  }
+
+  async deliverQueuedEmail(
+    email: EmailJobData,
+  ) {
+    try {
+      await axios.post(
+        "https://api.brevo.com/v3/smtp/email",
+        email,
         {
           headers: {
             "api-key":
               this.config.getOrThrow<string>(
                 "BREVO_API_KEY",
               ),
-
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
         },
       );

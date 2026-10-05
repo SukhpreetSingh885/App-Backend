@@ -20,7 +20,9 @@ import { VerificationModule } from "./verification/verification.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { CertificatesModule } from "./certificates/certificates.module";
 import { WithdrawalsModule } from "./withdrawals/withdrawals.module";
-
+import { RedisModule } from "./redis/redis.module";
+import { BullModule } from "@nestjs/bullmq";
+import { HealthModule } from "./health/health.module";
 @Module({
   imports: [
 
@@ -42,7 +44,19 @@ import { WithdrawalsModule } from "./withdrawals/withdrawals.module";
         uri: config.getOrThrow<string>("MONGODB_URI"),
       }),
     }),
-
+    RedisModule,
+BullModule.forRootAsync({
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    connection: {
+      host: config.getOrThrow<string>("REDIS_HOST"),
+      port: Number(
+        config.getOrThrow<string>("REDIS_PORT"),
+      ),
+    },
+  }),
+}),
     AuthModule,
     AuthSecurityModule,
     UsersModule,
@@ -58,6 +72,7 @@ import { WithdrawalsModule } from "./withdrawals/withdrawals.module";
     NotificationsModule,
     CertificatesModule,
     WithdrawalsModule,
+    HealthModule,
   ],
 
 

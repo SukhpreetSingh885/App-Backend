@@ -1,13 +1,14 @@
 import {
   Controller,
   Get,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { AdminGuard } from "./guards/admin.guard";
 import { AdminService } from "./admin.service";
-
+import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 @Controller("admin")
 @UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminController {
@@ -16,14 +17,18 @@ export class AdminController {
   @Get("dashboard")
   dashboard() { return this.adminService.dashboard(); }
 
-  @Get("users")
-  users() { return this.adminService.users(); }
+ @Get("users")
+users(@Query() query: PaginationQueryDto) {
+  return this.adminService.users(query);
+}
 
   @Get("courses")
   courses() { return this.adminService.courses(); }
 
-  @Get("enrollments")
-  enrollments() { return this.adminService.enrollments(); }
+@Get("enrollments")
+enrollments(@Query() query: PaginationQueryDto) {
+  return this.adminService.enrollments(query);
+}
 
   @Get("progress")
   progress() { return this.adminService.progress(); }
@@ -35,7 +40,7 @@ revenue() {
   return this.adminService.revenue();
 }
 @Get("payments")
-payments() {
-  return this.adminService.payments();
+payments(@Query() query: PaginationQueryDto) {
+  return this.adminService.payments(query);
 }
 }

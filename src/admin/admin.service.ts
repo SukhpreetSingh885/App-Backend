@@ -7,7 +7,7 @@ import { ProgressService } from "../progress/progress.service";
 import { UsersService } from "../users/users.service";
 
 import { PaymentsService } from "../payments/payments.service";
-
+import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 
 @Injectable()
 export class AdminService {
@@ -48,6 +48,10 @@ progress,
 
 revenue,
 
+lessons,
+
+payments,
+
 ]= await Promise.all([
 
 
@@ -68,6 +72,12 @@ this.progressService.findAll(),
 this.paymentsService.getRevenue(),
 
 
+this.lessonsService.findAll(),
+
+
+this.paymentsService.getPayments(),
+
+
 ]);
 
 
@@ -75,25 +85,25 @@ this.paymentsService.getRevenue(),
 return {
 
 
-users:
-users.length,
+users,
 
 
-courses:
-courses.length,
+courses,
 
 
-enrollments:
-enrollments.length,
+enrollments,
+
+
+progress,
+
+
+lessons,
 
 
 revenue,
 
 
-completedLessons:
-progress.filter(
-({completed})=>completed,
-).length,
+payments,
 
 
 };
@@ -103,15 +113,9 @@ progress.filter(
 
 
 
-
-
-async users(){
-
-return this.usersService.findAll();
-
+async users(query: PaginationQueryDto) {
+  return this.usersService.findAllPaginated(query);
 }
-
-
 
 async courses(){
 
@@ -123,10 +127,8 @@ includeDrafts:true,
 
 
 
-async enrollments(){
-
-return this.enrollmentsService.findAll();
-
+async enrollments(query: PaginationQueryDto) {
+  return this.enrollmentsService.findAllPaginated(query);
 }
 
 
@@ -148,7 +150,7 @@ return this.lessonsService.findAll();
 async revenue() {
   return this.paymentsService.getRevenue();
 }
-async payments() {
-  return this.paymentsService.getPayments();
+async payments(query: PaginationQueryDto) {
+  return this.paymentsService.getPaymentsPaginated(query);
 }
 }

@@ -7,7 +7,7 @@ import { ConfigService } from "@nestjs/config";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import Stripe = require("stripe");
-
+import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 import { CoursesService } from "../courses/courses.service";
 import { EnrollmentsService } from "../enrollments/enrollments.service";
 import {
@@ -311,7 +311,46 @@ export class PaymentsService {
       })
       .lean();
   }
+async getPaymentsPaginated(query: PaginationQueryDto) {
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 20;
 
+  const skip = (page - 1) * limit;
+
+  const [payments, total] = await Promise.all([
+    this.paymentModel
+      .find()
+      .sort({
+        paidAt: -1,
+        createdAt: -1,
+      })
+      .skip(skip)
+      .limit(limit)
+      .lean()
+      .exec(),
+
+    this.paymentModel
+      .countDocuments()
+      .exec(),
+  ]);
+
+  const totalPages =
+    total === 0
+      ? 0
+      : Math.ceil(total / limit);
+
+  return {
+    data: payments,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    },
+  };
+}
   private async completePaymentFromIntent(
     paymentIntent:
       Stripe.PaymentIntent,
