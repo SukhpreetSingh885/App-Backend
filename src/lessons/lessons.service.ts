@@ -6,7 +6,7 @@ import {
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
-
+import { UploadsService } from "../uploads/uploads.service";
 import { UserRole } from "../common/enums/user-role.enum";
 import { CoursesService } from "../courses/courses.service";
 import { EnrollmentsService } from "../enrollments/enrollments.service";
@@ -16,12 +16,13 @@ import { Lesson as LessonDocument } from "./schemas/lesson.schema";
 
 @Injectable()
 export class LessonsService {
-  constructor(
-    private readonly coursesService: CoursesService,
-    private readonly enrollmentsService: EnrollmentsService,
-    @InjectModel(LessonDocument.name)
-    private readonly lessonModel: Model<LessonDocument>,
-  ) {}
+ constructor(
+  private readonly coursesService: CoursesService,
+  private readonly enrollmentsService: EnrollmentsService,
+  private readonly uploadsService: UploadsService,
+  @InjectModel(LessonDocument.name)
+  private readonly lessonModel: Model<LessonDocument>,
+) {}
 
   async create(dto: CreateLessonDto) {
     await this.coursesService.getDocument(
@@ -109,52 +110,63 @@ export class LessonsService {
     return lesson;
   }
 
-  async update(
-    id: string,
-    dto: UpdateLessonDto,
-  ) {
-    const lesson =
-      await this.findOne(id);
+async update(
+  id: string,
+  dto: UpdateLessonDto,
+) {
+  const lesson =
+    await this.findOne(id);
 
-    if (dto.order !== undefined) {
-      await this.assertOrderAvailable(
-        lesson.courseId,
-        dto.order,
-        id,
-      );
-    }
-
-    const videoSource =
-      dto.videoSource ??
-      lesson.videoSource ??
-      "url";
-
-    const videoUrl =
-      dto.videoUrl ??
-      lesson.videoUrl;
-
-    const videoPublicId =
-      dto.videoPublicId ??
-      lesson.videoPublicId;
-
-    this.validateVideo(
-      videoSource,
-      videoUrl,
-      videoPublicId,
+  if (dto.order !== undefined) {
+    await this.assertOrderAvailable(
+      lesson.courseId,
+      dto.order,
+      id,
     );
+  }
 
-    const updateData: Record<
-      string,
-      unknown
-    > = {
-      ...dto,
-      updatedAt: new Date(),
-    };
+  const videoSource =
+    dto.videoSource ??
+    lesson.videoSource ??
+    "url";
 
-    if (videoSource === "url") {
-      delete updateData.videoPublicId;
+  const videoUrl =
+    dto.videoUrl ??
+    lesson.videoUrl;
 
-      return this.lessonModel
+  const videoPublicId =
+    dto.videoPublicId ??
+    lesson.videoPublicId;
+
+  this.validateVideo(
+    videoSource,
+    videoUrl,
+    videoPublicId,
+  );
+
+  const oldVideoPublicId =
+    lesson.videoPublicId;
+
+  const isReplacingCloudinaryVideo =
+    lesson.videoSource === "upload" &&
+    videoSource === "upload" &&
+    videoPublicId &&
+    oldVideoPublicId &&
+    videoPublicId !== oldVideoPublicId;
+
+  const updateData: Record<
+    string,
+    unknown
+  > = {
+    ...dto,
+    updatedAt: new Date(),
+  };
+
+  if (videoSource === "url") {
+    delete updateData.videoPublicId;
+
+    const updatedLesson =
+      await this.lessonModel
         .findByIdAndUpdate(
           id,
           {
@@ -166,9 +178,21 @@ export class LessonsService {
           { new: true },
         )
         .exec();
+
+    if (
+      lesson.videoSource === "upload" &&
+      oldVideoPublicId
+    ) {
+      await this.uploadsService.deleteVideo(
+        oldVideoPublicId,
+      );
     }
 
-    return this.lessonModel
+    return updatedLesson;
+  }
+
+  const updatedLesson =
+    await this.lessonModel
       .findByIdAndUpdate(
         id,
         {
@@ -177,8 +201,15 @@ export class LessonsService {
         { new: true },
       )
       .exec();
+
+  if (isReplacingCloudinaryVideo) {
+    await this.uploadsService.deleteVideo(
+      oldVideoPublicId,
+    );
   }
 
+  return updatedLesson;
+}
   async changeVideo(
     id: string,
     videoUrl: string,
@@ -187,24 +218,28 @@ export class LessonsService {
       videoUrl,
     });
   }
+async remove(id: string) {
+  const lesson =
+    await this.findOne(id);
 
-  async remove(id: string) {
-    const lesson =
-      await this.lessonModel
-        .findByIdAndDelete(id)
-        .exec();
-
-    if (!lesson) {
-      throw new NotFoundException(
-        "Lesson not found",
-      );
-    }
-
-    return {
-      message:
-        "Lesson deleted successfully",
-    };
+  if (
+    lesson.videoSource === "upload" &&
+    lesson.videoPublicId
+  ) {
+    await this.uploadsService.deleteVideo(
+      lesson.videoPublicId,
+    );
   }
+
+  await this.lessonModel
+    .findByIdAndDelete(id)
+    .exec();
+
+  return {
+    message:
+      "Lesson deleted successfully",
+  };
+}
 
   private validateVideo(
     videoSource: "upload" | "url",

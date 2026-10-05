@@ -86,7 +86,52 @@ export class UploadsService {
       publicId: result.public_id,
     };
   }
+async deleteVideo(publicId: string) {
+  if (!publicId?.trim()) {
+    this.logger.warn(
+      "Cloudinary delete skipped: publicId is empty",
+    );
+    return;
+  }
 
+  this.logger.log(
+    `Deleting Cloudinary video: ${publicId}`,
+  );
+
+  try {
+    const result =
+      await cloudinary.uploader.destroy(
+        publicId,
+        {
+          resource_type: "video",
+          type: "upload",
+          invalidate: true,
+        },
+      );
+
+    this.logger.log(
+      `Cloudinary delete response: ${JSON.stringify(result)}`,
+    );
+
+    if (result.result !== "ok") {
+      throw new Error(
+        `Cloudinary deletion failed: ${result.result}`,
+      );
+    }
+  } catch (error) {
+    const cloudinaryError =
+      error as CloudinaryError;
+
+    this.logger.error(
+      `Cloudinary video deletion failed: ${
+        cloudinaryError.message ??
+        "Unknown error"
+      }`,
+    );
+
+    throw error;
+  }
+}
   getVideoUploadSignature() {
     const timestamp =
       Math.round(Date.now() / 1000);
@@ -170,17 +215,16 @@ export class UploadsService {
             },
           );
 
-        stream.on(
-          "error",
-          (
-            error:
-              CloudinaryError,
-          ) => {
-            this.logger.error(
-              `Cloudinary stream error: ${error.message ?? "Unknown error"} | status: ${error.http_code ?? "unknown"} | name: ${error.name ?? "unknown"}`,
-            );
-          },
-        );
+  stream.on(
+  "error",
+  (error: CloudinaryError) => {
+    this.logger.error(
+      `Cloudinary stream error: ${error.message ?? "Unknown error"} | status: ${error.http_code ?? "unknown"} | name: ${error.name ?? "unknown"}`,
+    );
+
+    reject(error);
+  },
+);
 
         stream.end(buffer);
       },

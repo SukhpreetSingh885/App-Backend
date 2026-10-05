@@ -8,12 +8,13 @@ import { EnrollmentsModule } from "../enrollments/enrollments.module";
 import { LessonsController } from "./lessons.controller";
 import { LessonsService } from "./lessons.service";
 import { Lesson, LessonSchema } from "./schemas/lesson.schema";
-
+import { UploadsModule } from "../uploads/uploads.module";
 @Module({
-  imports: [
-    AuthModule,
-    CoursesModule,
-    EnrollmentsModule,
+imports: [
+  AuthModule,
+  CoursesModule,
+  EnrollmentsModule,
+  UploadsModule,
     MongooseModule.forFeature([
       {
         name: Lesson.name,

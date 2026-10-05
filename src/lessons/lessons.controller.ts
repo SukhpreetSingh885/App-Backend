@@ -78,6 +78,7 @@ export class LessonsController {
   @Roles(UserRole.Admin)
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param("id") id: string) {
+      console.log("DELETE LESSON CONTROLLER:", id);
     return this.lessonsService.remove(id);
   }
 }
